@@ -158,20 +158,6 @@ The generated HTML meets these WCAG 2.1 AA success criteria:
 | 2.4.7 | Focus Visible | Clear focus indicators |
 | 2.3.3 | Animation | Reduced motion support |
 
-## Integration with OSCQR
-
-This tool can be used standalone or integrated with the OSCQR course evaluation system:
-
-```python
-# From OSCQR
-from pdf_conversion import get_standalone_converter
-
-converter_cls = get_standalone_converter()
-if converter_cls:
-    converter = converter_cls()
-    result = converter.convert('syllabus.pdf')
-```
-
 ## License
 
 MIT License
