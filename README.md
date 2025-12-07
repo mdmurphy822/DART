@@ -7,6 +7,8 @@ A toolkit for converting PDF documents to WCAG 2.1 AA compliant accessible HTML.
 - **pdftotext extraction** for born-digital PDFs (best quality)
 - **OCR fallback** for scanned documents using Tesseract
 - **Automatic structure detection** - headings, paragraphs, tables, references
+- **Image extraction** - raster images and vector graphics rendered as PNG
+- **AI-powered alt text** - automatic image descriptions using Claude
 - **WCAG 2.1 AA compliant output** including:
   - Skip links for keyboard navigation
   - ARIA landmarks and roles
@@ -121,7 +123,8 @@ DART/
 │   ├── wcag_enhancer.py    # WCAG enhancement
 │   ├── cli.py              # CLI implementation
 │   ├── alt_text_generator.py  # AI-powered alt text
-│   ├── image_extractor.py  # PDF image extraction
+│   ├── image_extractor.py  # PDF image extraction (raster + vector)
+│   ├── embed_images.py     # Image embedding utility
 │   ├── math_processor.py   # Math/LaTeX processing
 │   └── claude_processor.py # Claude API integration
 ├── templates/
@@ -139,14 +142,17 @@ DART/
 Usage: python convert.py <input.pdf> [options]
 
 Options:
-  -o, --output DIR    Output directory (default: ./output/)
-  -n, --name NAME     Output filename (default: derived from PDF)
-  --no-dark-mode      Disable dark mode CSS support
-  --no-ocr            Skip OCR fallback for image-heavy PDFs
-  --dpi N             DPI for OCR processing (default: 300)
-  --lang CODE         Tesseract language code (default: eng)
-  -v, --verbose       Enable verbose output
-  --version           Show version information
+  -o, --output DIR       Output directory (default: ./output/)
+  -n, --name NAME        Output filename (default: derived from PDF)
+  --no-dark-mode         Disable dark mode CSS support
+  --no-ocr               Skip OCR fallback for image-heavy PDFs
+  --dpi N                DPI for OCR processing (default: 300)
+  --lang CODE            Tesseract language code (default: eng)
+  --no-vector-graphics   Skip vector diagram detection/rendering
+  --vector-dpi N         DPI for vector graphics rendering (default: 150)
+  --vector-min-drawings  Min drawing ops to detect vector region (default: 5)
+  -v, --verbose          Enable verbose output
+  --version              Show version information
 ```
 
 ## WCAG 2.1 AA Compliance

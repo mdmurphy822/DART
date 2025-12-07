@@ -31,6 +31,273 @@ class ExtractedImage:
     image_hash: str = ""           # Hash for deduplication
     alt_text: str = ""             # Generated alt text
     long_description: str = ""     # Extended description
+    is_vector_render: bool = False # True if rendered from vector graphics
+
+
+class VectorRegionExtractor:
+    """
+    Detect and extract vector graphics regions from PDF pages.
+
+    Vector graphics (lines, curves, shapes) are rendered as PNG images
+    for accessibility processing.
+    """
+
+    def __init__(
+        self,
+        min_drawings: int = 5,
+        cluster_distance: float = 50.0,
+        render_dpi: int = 150,
+        min_region_size: Tuple[int, int] = (50, 50),
+        max_region_ratio: float = 0.9,
+    ):
+        """
+        Initialize vector region extractor.
+
+        Args:
+            min_drawings: Minimum drawing operations to consider a region
+            cluster_distance: Distance in points to cluster nearby drawings
+            render_dpi: DPI for rendering regions as images
+            min_region_size: Minimum (width, height) for a valid region
+            max_region_ratio: Maximum ratio of page size (filters full-page borders)
+        """
+        self.min_drawings = min_drawings
+        self.cluster_distance = cluster_distance
+        self.render_dpi = render_dpi
+        self.min_region_size = min_region_size
+        self.max_region_ratio = max_region_ratio
+
+    def extract_regions(self, page, page_num: int) -> List[ExtractedImage]:
+        """
+        Extract vector regions from a page.
+
+        Args:
+            page: PyMuPDF page object
+            page_num: Page number (0-indexed)
+
+        Returns:
+            List of ExtractedImage objects from rendered vector regions
+        """
+        try:
+            drawings = page.get_drawings()
+        except Exception as e:
+            logger.debug(f"Could not get drawings from page {page_num + 1}: {e}")
+            return []
+
+        if len(drawings) < self.min_drawings:
+            return []
+
+        # Cluster drawings into regions
+        regions = self._cluster_drawings(drawings, page.rect)
+
+        if not regions:
+            return []
+
+        logger.debug(f"Page {page_num + 1}: Found {len(regions)} vector regions from {len(drawings)} drawings")
+
+        # Render each region as an image
+        images = []
+        for i, region_bbox in enumerate(regions):
+            try:
+                img = self._render_region(page, region_bbox, page_num, i)
+                if img:
+                    images.append(img)
+            except Exception as e:
+                logger.warning(f"Failed to render vector region {i} on page {page_num + 1}: {e}")
+
+        return images
+
+    def _cluster_drawings(self, drawings: List, page_rect) -> List:
+        """
+        Cluster nearby drawings into diagram regions.
+
+        Args:
+            drawings: List of drawing dicts from page.get_drawings()
+            page_rect: Page bounding rectangle
+
+        Returns:
+            List of fitz.Rect bounding boxes for each cluster
+        """
+        if not drawings:
+            return []
+
+        try:
+            import fitz
+        except ImportError:
+            return []
+
+        # Get bounding boxes and expand by cluster distance
+        boxes = []
+        for d in drawings:
+            rect = d.get("rect")
+            if rect:
+                # Expand box for clustering
+                expanded = fitz.Rect(
+                    rect.x0 - self.cluster_distance,
+                    rect.y0 - self.cluster_distance,
+                    rect.x1 + self.cluster_distance,
+                    rect.y1 + self.cluster_distance,
+                )
+                boxes.append(expanded)
+
+        if not boxes:
+            return []
+
+        # Merge overlapping boxes
+        merged = self._merge_overlapping_boxes(boxes, fitz)
+
+        # Filter regions
+        valid_regions = []
+        page_width = page_rect.width
+        page_height = page_rect.height
+
+        for box in merged:
+            # Shrink back by cluster distance to get actual region
+            actual = fitz.Rect(
+                box.x0 + self.cluster_distance,
+                box.y0 + self.cluster_distance,
+                box.x1 - self.cluster_distance,
+                box.y1 - self.cluster_distance,
+            )
+
+            # Clip to page bounds
+            actual = actual & page_rect
+
+            if actual.is_empty:
+                continue
+
+            width = actual.width
+            height = actual.height
+
+            # Filter by size
+            if width < self.min_region_size[0] or height < self.min_region_size[1]:
+                continue
+
+            # Filter out page-spanning regions (likely borders/frames)
+            if width > page_width * self.max_region_ratio and height > page_height * self.max_region_ratio:
+                continue
+
+            valid_regions.append(actual)
+
+        return valid_regions
+
+    def _merge_overlapping_boxes(self, boxes: List, fitz) -> List:
+        """
+        Merge overlapping bounding boxes.
+
+        Args:
+            boxes: List of fitz.Rect objects
+            fitz: PyMuPDF module
+
+        Returns:
+            List of merged fitz.Rect objects
+        """
+        if not boxes:
+            return []
+
+        # Sort boxes by x0 coordinate
+        boxes = sorted(boxes, key=lambda b: (b.y0, b.x0))
+
+        merged = []
+        current = boxes[0]
+
+        for box in boxes[1:]:
+            # Check if boxes overlap or are close
+            if current.intersects(box):
+                # Merge into current
+                current = current | box  # Union
+            else:
+                merged.append(current)
+                current = box
+
+        merged.append(current)
+
+        # Multiple passes to catch transitive overlaps
+        changed = True
+        while changed:
+            changed = False
+            new_merged = []
+            used = set()
+
+            for i, box1 in enumerate(merged):
+                if i in used:
+                    continue
+
+                current = box1
+                for j, box2 in enumerate(merged):
+                    if j <= i or j in used:
+                        continue
+
+                    if current.intersects(box2):
+                        current = current | box2
+                        used.add(j)
+                        changed = True
+
+                new_merged.append(current)
+                used.add(i)
+
+            merged = new_merged
+
+        return merged
+
+    def _render_region(
+        self,
+        page,
+        bbox,
+        page_num: int,
+        region_index: int
+    ) -> Optional[ExtractedImage]:
+        """
+        Render a vector region as a PNG image.
+
+        Args:
+            page: PyMuPDF page object
+            bbox: Region bounding box
+            page_num: Page number (0-indexed)
+            region_index: Index of region on this page
+
+        Returns:
+            ExtractedImage or None
+        """
+        try:
+            # Add padding to capture text labels beyond drawing boundaries
+            import fitz
+            padded = fitz.Rect(
+                bbox.x0 - 40,
+                bbox.y0 - 40,
+                bbox.x1 + 40,
+                bbox.y1 + 40,
+            )
+            padded = padded & page.rect  # Clip to page
+
+            # Render to pixmap
+            mat = fitz.Matrix(self.render_dpi / 72, self.render_dpi / 72)
+            pixmap = page.get_pixmap(matrix=mat, clip=padded, alpha=False)
+
+            # Convert to PNG bytes
+            png_data = pixmap.tobytes("png")
+
+            # Calculate hash for deduplication
+            image_hash = hashlib.md5(png_data).hexdigest()
+
+            # Create data URI
+            data_uri = f"data:image/png;base64,{base64.b64encode(png_data).decode()}"
+
+            return ExtractedImage(
+                data=png_data,
+                format='png',
+                page=page_num + 1,
+                width=pixmap.width,
+                height=pixmap.height,
+                bbox=(bbox.x0, bbox.y0, bbox.x1, bbox.y1),
+                data_uri=data_uri,
+                image_hash=image_hash,
+                is_vector_render=True,
+                nearby_caption="",  # Will be filled by caption finder
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to render vector region: {e}")
+            return None
 
 
 class PDFImageExtractor:
@@ -49,16 +316,37 @@ class PDFImageExtractor:
         re.compile(r'^(Image|Diagram|Chart|Graph|Photo)\s*\d*[.:]?\s*(.*)$', re.IGNORECASE),
     ]
 
-    def __init__(self, pdf_path: str):
+    def __init__(
+        self,
+        pdf_path: str,
+        extract_vector_graphics: bool = True,
+        vector_min_drawings: int = 5,
+        vector_cluster_distance: float = 50.0,
+        vector_render_dpi: int = 150,
+    ):
         """
         Initialize extractor with PDF path.
 
         Args:
             pdf_path: Path to PDF file
+            extract_vector_graphics: Whether to extract vector graphics as images
+            vector_min_drawings: Minimum drawings to consider a region
+            vector_cluster_distance: Distance to cluster nearby drawings
+            vector_render_dpi: DPI for rendering vector regions
         """
         self.pdf_path = pdf_path
+        self.extract_vector_graphics = extract_vector_graphics
         self._doc = None
         self._fitz = None
+
+        # Initialize vector extractor if enabled
+        self._vector_extractor = None
+        if extract_vector_graphics:
+            self._vector_extractor = VectorRegionExtractor(
+                min_drawings=vector_min_drawings,
+                cluster_distance=vector_cluster_distance,
+                render_dpi=vector_render_dpi,
+            )
 
         try:
             import fitz  # PyMuPDF
@@ -111,6 +399,7 @@ class PDFImageExtractor:
         images = []
         page = self._doc[page_num]
 
+        # Extract raster images
         try:
             image_list = page.get_images(full=True)
 
@@ -128,6 +417,17 @@ class PDFImageExtractor:
 
         except Exception as e:
             logger.error(f"Failed to get images from page {page_num + 1}: {e}")
+
+        # Extract vector graphics regions
+        if self._vector_extractor:
+            try:
+                vector_images = self._vector_extractor.extract_regions(page, page_num)
+                for vimg in vector_images:
+                    # Try to find nearby caption for vector regions
+                    vimg.nearby_caption = self._find_nearby_caption(page, vimg.bbox)
+                    images.append(vimg)
+            except Exception as e:
+                logger.warning(f"Failed to extract vector regions from page {page_num + 1}: {e}")
 
         return images
 

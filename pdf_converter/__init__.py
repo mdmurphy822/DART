@@ -59,6 +59,13 @@ except ImportError:
     AltTextGenerator = None
     AltTextResult = None
 
+try:
+    from .embed_images import embed_images, load_metadata, create_figure_element
+except ImportError:
+    embed_images = None
+    load_metadata = None
+    create_figure_element = None
+
 __version__ = '1.0.0'
 __all__ = [
     # Core
@@ -80,6 +87,10 @@ __all__ = [
     'ExtractedImage',
     'AltTextGenerator',
     'AltTextResult',
+    # Image embedding (optional)
+    'embed_images',
+    'load_metadata',
+    'create_figure_element',
 ]
 
 

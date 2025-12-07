@@ -146,6 +146,27 @@ def parse_args(args: list = None) -> argparse.Namespace:
         help='Maximum width for embedded images in pixels (default: 800)'
     )
 
+    # Vector graphics options
+    parser.add_argument(
+        '--no-vector-graphics',
+        action='store_true',
+        help='Skip detection and rendering of vector diagrams'
+    )
+
+    parser.add_argument(
+        '--vector-dpi',
+        type=int,
+        default=150,
+        help='DPI for rendering vector graphics as images (default: 150)'
+    )
+
+    parser.add_argument(
+        '--vector-min-drawings',
+        type=int,
+        default=5,
+        help='Minimum drawing operations to consider a vector region (default: 5)'
+    )
+
     return parser.parse_args(args)
 
 
@@ -194,6 +215,9 @@ def main(args: list = None) -> int:
         use_ai_alt_text=not parsed.no_ai_alt_text,
         image_quality=parsed.image_quality,
         max_image_width=parsed.max_image_width,
+        extract_vector_graphics=not parsed.no_vector_graphics,
+        vector_min_drawings=parsed.vector_min_drawings,
+        vector_render_dpi=parsed.vector_dpi,
     )
 
     # Convert

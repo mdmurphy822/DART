@@ -70,6 +70,11 @@ class PDFToAccessibleHTML:
         use_ai_alt_text: bool = True,
         image_quality: int = 85,
         max_image_width: int = 800,
+        # Vector graphics options
+        extract_vector_graphics: bool = True,
+        vector_min_drawings: int = 5,
+        vector_cluster_distance: float = 50.0,
+        vector_render_dpi: int = 150,
     ):
         """
         Initialize the converter.
@@ -87,6 +92,10 @@ class PDFToAccessibleHTML:
             use_ai_alt_text: Whether to use Claude for alt text generation
             image_quality: JPEG quality for compressed images (1-100)
             max_image_width: Maximum width for embedded images
+            extract_vector_graphics: Whether to detect and render vector diagrams
+            vector_min_drawings: Minimum drawing operations to consider a vector region
+            vector_cluster_distance: Distance (pixels) to cluster nearby drawings
+            vector_render_dpi: DPI for rendering vector regions as images
         """
         self.dpi = dpi
         self.lang = lang
@@ -97,6 +106,10 @@ class PDFToAccessibleHTML:
         self.use_ai_alt_text = use_ai_alt_text
         self.image_quality = image_quality
         self.max_image_width = max_image_width
+        self.extract_vector_graphics = extract_vector_graphics
+        self.vector_min_drawings = vector_min_drawings
+        self.vector_cluster_distance = vector_cluster_distance
+        self.vector_render_dpi = vector_render_dpi
 
         self._claude = None
         self._claude_config = {
@@ -328,8 +341,14 @@ class PDFToAccessibleHTML:
             from .image_extractor import PDFImageExtractor, ImageProcessor
             from .alt_text_generator import AltTextGenerator
 
-            # Extract images
-            with PDFImageExtractor(pdf_path) as extractor:
+            # Extract images (raster + vector if enabled)
+            with PDFImageExtractor(
+                pdf_path,
+                extract_vector_graphics=self.extract_vector_graphics,
+                vector_min_drawings=self.vector_min_drawings,
+                vector_cluster_distance=self.vector_cluster_distance,
+                vector_render_dpi=self.vector_render_dpi,
+            ) as extractor:
                 images = extractor.extract_all()
                 images_extracted = len(images)
 
