@@ -1,6 +1,6 @@
-# PDF Accessibility Converter
+# DART (Digital Accessibility Remediation Tool)
 
-A standalone toolkit for converting PDF documents to WCAG 2.1 AA compliant accessible HTML.
+A toolkit for converting PDF documents to WCAG 2.1 AA compliant accessible HTML.
 
 ## Features
 
