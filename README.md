@@ -113,16 +113,24 @@ DART/
 ├── convert.py              # CLI entry point
 ├── pyproject.toml          # Package configuration
 ├── README.md               # This file
+├── CLAUDE.md               # Development guidance
+├── Examples.zip            # Sample input/output examples
 ├── pdf_converter/          # Core package
 │   ├── __init__.py         # Public API
 │   ├── converter.py        # PDF to HTML converter
 │   ├── wcag_enhancer.py    # WCAG enhancement
-│   └── cli.py              # CLI implementation
+│   ├── cli.py              # CLI implementation
+│   ├── alt_text_generator.py  # AI-powered alt text
+│   ├── image_extractor.py  # PDF image extraction
+│   ├── math_processor.py   # Math/LaTeX processing
+│   └── claude_processor.py # Claude API integration
 ├── templates/
 │   └── gold_standard.html  # Reference template
 ├── output/                 # Default output directory
 └── tests/
-    └── test_converter.py   # Tests
+    ├── test_alt_text_generator.py
+    ├── test_image_extractor.py
+    └── test_math_processor.py
 ```
 
 ## CLI Options

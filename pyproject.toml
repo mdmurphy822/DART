@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pdf-accessibility-converter"
+name = "dart"
 version = "1.0.0"
 description = "Convert PDF documents to WCAG 2.1 AA compliant accessible HTML"
 readme = "README.md"
@@ -63,9 +63,9 @@ dev = [
 pdf-to-html = "pdf_converter.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/example/pdf-accessibility-converter"
-Documentation = "https://github.com/example/pdf-accessibility-converter#readme"
-Issues = "https://github.com/example/pdf-accessibility-converter/issues"
+Homepage = "https://github.com/mdmurphy822/DART"
+Documentation = "https://github.com/mdmurphy822/DART#readme"
+Issues = "https://github.com/mdmurphy822/DART/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
