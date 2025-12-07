@@ -31,7 +31,7 @@ brew install poppler tesseract
 ### Python Package
 
 ```bash
-cd PDF_Accessibility_Converter
+cd DART
 
 # Basic installation
 pip install -e .
@@ -109,7 +109,7 @@ Use this as a reference when customizing output styles.
 ## Directory Structure
 
 ```
-PDF_Accessibility_Converter/
+DART/
 ├── convert.py              # CLI entry point
 ├── pyproject.toml          # Package configuration
 ├── README.md               # This file
