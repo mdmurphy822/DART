@@ -298,7 +298,7 @@ LONG: [your long description here]"""
         """
         try:
             import io
-            img = self._pil.Image.open(io.BytesIO(image.data))
+            img = self._pil.open(io.BytesIO(image.data))
 
             # Run OCR
             text = self._pytesseract.image_to_string(img, config='--psm 6').strip()

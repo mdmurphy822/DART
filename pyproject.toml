@@ -63,9 +63,9 @@ dev = [
 pdf-to-html = "pdf_converter.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/mdmurphy822/DART"
-Documentation = "https://github.com/mdmurphy822/DART#readme"
-Issues = "https://github.com/mdmurphy822/DART/issues"
+Homepage = "https://github.com/example/pdf-accessibility-converter"
+Documentation = "https://github.com/example/pdf-accessibility-converter#readme"
+Issues = "https://github.com/example/pdf-accessibility-converter/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

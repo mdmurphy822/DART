@@ -169,11 +169,22 @@ class PDFToAccessibleHTML:
                 text_output_path = output_dir / f"{pdf_path.stem}_extracted.txt"
                 text_output_path.write_text(raw_text, encoding='utf-8')
                 logger.info(f"Extracted text saved to: {text_output_path}")
+
+                # Save extracted images for incorporation during review
+                images_dir = None
+                if extracted_images:
+                    images_dir = self._save_images_for_review(
+                        extracted_images, output_dir, pdf_path.stem
+                    )
+                    logger.info(f"Extracted {len(extracted_images)} images to: {images_dir}")
+
                 logger.info("="*60)
                 logger.info("TEXT EXTRACTION COMPLETE")
                 logger.info("="*60)
                 logger.info(f"To generate gold-standard HTML, run in Claude Code:")
                 logger.info(f"  'Review {text_output_path} and generate accessible HTML'")
+                if extracted_images:
+                    logger.info(f"  Include the {len(extracted_images)} extracted images from {images_dir}")
                 logger.info("="*60)
 
                 return ConversionResult(
@@ -181,10 +192,12 @@ class PDFToAccessibleHTML:
                     html_path=str(text_output_path),
                     pages_processed=self._count_pages(str(pdf_path)),
                     total_words=total_words,
-                    title=f"[EXTRACTED] {pdf_path.stem}"
+                    title=f"[EXTRACTED] {pdf_path.stem}",
+                    images_extracted=images_extracted,
+                    images_with_alt_text=images_with_alt_text,
                 )
             else:
-                # Use regex-based structuring
+                # Use regex-based structuring (for simple documents only)
                 logger.info("Using regex-based text structuring")
                 blocks = self._structure_text(raw_text)
                 title = self._detect_title(blocks, pdf_path.stem)
@@ -356,6 +369,63 @@ class PDFToAccessibleHTML:
             logger.error(f"Image extraction failed: {e}")
 
         return images, images_extracted, images_with_alt_text
+
+    def _save_images_for_review(
+        self,
+        images: list,
+        output_dir: Path,
+        pdf_stem: str
+    ) -> Path:
+        """
+        Save extracted images to disk for Claude Code review workflow.
+
+        Args:
+            images: List of ExtractedImage objects
+            output_dir: Output directory
+            pdf_stem: PDF filename stem
+
+        Returns:
+            Path to images directory
+        """
+        import json
+
+        # Create images directory
+        images_dir = output_dir / f"{pdf_stem}_images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save each image and build metadata
+        metadata = []
+        for idx, img in enumerate(images):
+            # Determine file extension
+            ext = img.format if img.format else 'png'
+            if ext == 'jpeg':
+                ext = 'jpg'
+
+            filename = f"image_{idx + 1}_page_{img.page}.{ext}"
+            filepath = images_dir / filename
+
+            # Save image data
+            filepath.write_bytes(img.data)
+
+            # Build metadata entry
+            metadata.append({
+                'filename': filename,
+                'page': img.page,
+                'width': img.width,
+                'height': img.height,
+                'caption': img.nearby_caption or '',
+                'alt_text': img.alt_text or '',
+                'long_description': img.long_description or '',
+            })
+
+        # Save metadata JSON
+        metadata_path = images_dir / 'images_metadata.json'
+        metadata_path.write_text(
+            json.dumps(metadata, indent=2),
+            encoding='utf-8'
+        )
+
+        return images_dir
 
     def _embed_images_in_html(self, html_content: str, images: list) -> str:
         """

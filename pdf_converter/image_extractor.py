@@ -348,19 +348,19 @@ class ImageProcessor:
             return image
 
         try:
-            img = self._pil.Image.open(io.BytesIO(image.data))
+            img = self._pil.open(io.BytesIO(image.data))
 
             # Resize if wider than max
             if img.width > self.max_width:
                 ratio = self.max_width / img.width
                 new_height = int(img.height * ratio)
-                img = img.resize((self.max_width, new_height), self._pil.Image.LANCZOS)
+                img = img.resize((self.max_width, new_height), self._pil.Resampling.LANCZOS)
                 image.width = self.max_width
                 image.height = new_height
 
             # Convert to RGB if needed (for JPEG)
             if img.mode in ('RGBA', 'P', 'LA'):
-                background = self._pil.Image.new('RGB', img.size, (255, 255, 255))
+                background = self._pil.new('RGB', img.size, (255, 255, 255))
                 if img.mode == 'P':
                     img = img.convert('RGBA')
                 background.paste(img, mask=img.split()[-1] if 'A' in img.mode else None)
