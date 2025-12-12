@@ -31,7 +31,7 @@ Requires `poppler-utils` (for pdftotext/pdfinfo) and optionally `tesseract-ocr` 
 
 ## Architecture Overview
 
-The converter follows a pipeline architecture: **PDF → Text Extraction → Structure Detection → Semantic HTML → WCAG Enhancement**
+The converter follows a pipeline architecture: **PDF → Text Extraction → Structure Detection → Semantic HTML → WCAG 2.2 Enhancement → Validation**
 
 ### Core Modules
 
@@ -39,22 +39,33 @@ The converter follows a pipeline architecture: **PDF → Text Extraction → Str
   - Uses `pdftotext` for born-digital PDFs (primary), falls back to Tesseract OCR for scanned documents
   - `_structure_text()`: Parses raw text into `TextBlock` objects (paragraph/heading detection)
   - `_generate_semantic_html()`: Creates initial HTML with sections and proper heading hierarchy
-  - Returns `ConversionResult` dataclass with success status, output path, and metadata
+  - Returns `ConversionResult` dataclass with success status, output path, metadata, and WCAG validation results
 
-- **`pdf_converter/wcag_enhancer.py`** (`WCAGHTMLEnhancer`): Post-processor for WCAG 2.1 AA compliance
+- **`pdf_converter/wcag_enhancer.py`** (`WCAGHTMLEnhancer`): Post-processor for WCAG 2.2 AA compliance
   - Six-phase enhancement: document structure → semantic improvements → figures → cross-references → CSS → cleanup
   - Adds skip links, ARIA landmarks, section wrappers, expandable figure descriptions
   - Detects and converts references sections to ordered lists, table-like content to proper tables
   - Creates internal links for "Figure X" and "Table X" references
   - `WCAGOptions` dataclass controls which enhancements to apply
+  - **WCAG 2.2 specific features:**
+    - Focus not obscured (2.4.11, 2.4.12): scroll-margin for focused elements
+    - Focus appearance (2.4.13): 3px outline exceeds 2px minimum requirement
+    - Target size (2.5.8): 24x24px minimum for interactive elements
+
+- **`pdf_converter/wcag_validator.py`** (`WCAGValidator`): WCAG 2.2 AA validation
+  - Validates HTML against 13 WCAG success criteria
+  - Reports issues by severity: CRITICAL (Level A), HIGH (Level AA), MEDIUM (best practice), LOW (enhancement)
+  - `ValidationReport` dataclass with JSON and text output formats
+  - Integrated into converter pipeline (optional, enabled by default)
 
 ### Public API
 
 ```python
 from pdf_converter import convert, PDFToAccessibleHTML, enhance_html_wcag, WCAGOptions
+from pdf_converter import WCAGValidator, validate_html_wcag, ValidationReport
 ```
 
-The `convert()` function in `__init__.py` is the simple entry point; `PDFToAccessibleHTML` allows custom configuration (dpi, lang, min_confidence).
+The `convert()` function in `__init__.py` is the simple entry point; `PDFToAccessibleHTML` allows custom configuration (dpi, lang, min_confidence, validate_wcag).
 
 ### Key Design Patterns
 

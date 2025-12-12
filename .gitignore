@@ -60,3 +60,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Large example files (download separately)
+input_pdfs/nasa_*.pdf
+output/nasa_*_images/
+output/nasa_*_tables/
+output/nasa_*_extracted.txt

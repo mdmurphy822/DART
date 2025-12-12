@@ -94,12 +94,6 @@ def parse_args(args: list = None) -> argparse.Namespace:
 
     # Claude integration options
     parser.add_argument(
-        '--no-claude',
-        action='store_true',
-        help='Disable Claude AI processing, use regex-based text structuring instead'
-    )
-
-    parser.add_argument(
         '--claude-model',
         type=str,
         default='claude-sonnet-4-20250514',
@@ -207,7 +201,6 @@ def main(args: list = None) -> int:
     converter = PDFToAccessibleHTML(
         dpi=parsed.dpi,
         lang=parsed.lang,
-        use_claude=not parsed.no_claude,
         claude_model=parsed.claude_model,
         enable_cache=not parsed.no_cache,
         enable_math=not parsed.no_math,

@@ -1,7 +1,7 @@
 """
 PDF Accessibility Converter
 
-A standalone toolkit for converting PDF documents to WCAG 2.1 AA compliant HTML.
+A standalone toolkit for converting PDF documents to WCAG 2.2 AA compliant HTML.
 
 Features:
 - pdftotext extraction for born-digital PDFs
@@ -10,7 +10,7 @@ Features:
 - Automatic structure detection (headings, paragraphs, tables)
 - MathML conversion for mathematical expressions (LaTeX, Unicode)
 - Image extraction with AI-generated alt text
-- WCAG 2.1 AA compliant output with:
+- WCAG 2.2 AA compliant output with:
   - Skip links for keyboard navigation
   - ARIA landmarks
   - Semantic HTML structure
@@ -36,6 +36,16 @@ from .wcag_enhancer import (
     WCAGOptions,
     enhance_html_wcag,
     enhance_html_file,
+)
+
+from .wcag_validator import (
+    WCAGValidator,
+    ValidationReport,
+    WCAGIssue,
+    IssueSeverity,
+    WCAGCriterion,
+    validate_html_wcag,
+    validate_html_file,
 )
 
 # Optional imports for math and image processing
@@ -66,7 +76,7 @@ except ImportError:
     load_metadata = None
     create_figure_element = None
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'  # WCAG 2.2 AA update
 __all__ = [
     # Core
     'PDFToAccessibleHTML',
@@ -77,6 +87,14 @@ __all__ = [
     'WCAGOptions',
     'enhance_html_wcag',
     'enhance_html_file',
+    # WCAG Validation
+    'WCAGValidator',
+    'ValidationReport',
+    'WCAGIssue',
+    'IssueSeverity',
+    'WCAGCriterion',
+    'validate_html_wcag',
+    'validate_html_file',
     # Math processing (optional)
     'MathDetector',
     'MathMLConverter',

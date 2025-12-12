@@ -1,7 +1,7 @@
 """
-WCAG 2.1 AA HTML Enhancer
+WCAG 2.2 AA HTML Enhancer
 
-Post-processor to enhance HTML output for WCAG 2.1 AA accessibility compliance.
+Post-processor to enhance HTML output for WCAG 2.2 AA accessibility compliance.
 Designed to work with output from pdf_to_html_converter_hybrid.py.
 
 Features:
@@ -14,7 +14,10 @@ Features:
 - Reference section detection and list conversion
 - Subsection heading detection (A., B., C. patterns)
 - Internal figure link creation
-- WCAG AA compliant CSS (dark mode, reduced motion, contrast)
+- WCAG 2.2 AA compliant CSS (dark mode, reduced motion, contrast)
+- Focus not obscured support (WCAG 2.2 - 2.4.11, 2.4.12)
+- Focus appearance compliance (WCAG 2.2 - 2.4.13)
+- Target size minimums (WCAG 2.2 - 2.5.8)
 """
 
 import re
@@ -30,7 +33,7 @@ import unicodedata
 
 @dataclass
 class WCAGOptions:
-    """Configuration options for WCAG enhancement."""
+    """Configuration options for WCAG 2.2 AA enhancement."""
     add_skip_link: bool = True
     add_aria_landmarks: bool = True
     use_sections: bool = True
@@ -55,6 +58,13 @@ class WCAGOptions:
     document_title: str = ""
     document_author: str = ""
     document_description: str = ""
+    # WCAG 2.2 specific options
+    focus_not_obscured: bool = True      # 2.4.11, 2.4.12 - scroll-margin for focus
+    focus_appearance_2px: bool = True    # 2.4.13 - minimum 2px focus outline
+    target_size_minimum: bool = True     # 2.5.8 - 24x24px minimum target size
+    wcag_version: str = "2.2"            # WCAG version targeting
+    # CSS injection control
+    inject_css: bool = True              # Set to False to skip CSS injection (use external CSS)
 
 
 # =============================================================================
@@ -62,7 +72,7 @@ class WCAGOptions:
 # =============================================================================
 
 WCAG_CSS = '''
-/* WCAG 2.1 AA Compliant Styles */
+/* WCAG 2.2 AA Compliant Styles */
 
 /* Base reset */
 *, *::before, *::after { box-sizing: border-box; }
@@ -143,17 +153,24 @@ body {
   outline-offset: 2px;
 }
 
-/* Focus styles (WCAG 2.4.7) */
+/* Focus styles (WCAG 2.4.7, 2.4.13) */
+/* WCAG 2.2 2.4.13 Focus Appearance - minimum 2px outline with 3:1 contrast */
 :focus {
-  outline: 3px solid var(--color-focus);
+  outline: 3px solid var(--color-focus);  /* Exceeds 2px minimum requirement */
   outline-offset: 2px;
 }
 :focus:not(:focus-visible) {
   outline: none;
 }
 :focus-visible {
-  outline: 3px solid var(--color-focus);
+  outline: 3px solid var(--color-focus);  /* Exceeds 2px minimum requirement */
   outline-offset: 2px;
+}
+
+/* WCAG 2.2 2.4.11/2.4.12 Focus Not Obscured - ensure scroll margin */
+*:focus {
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 80px;
 }
 
 /* Typography */
@@ -200,6 +217,22 @@ a {
 a:hover, a:focus {
   color: var(--color-accent-dark);
   text-decoration-thickness: 2px;
+}
+
+/* WCAG 2.2 2.5.8 Target Size (Minimum) - 24x24 CSS pixels */
+a:not(p a):not(li a):not(td a):not(figcaption a),
+button,
+[role="button"],
+summary,
+details > summary {
+  min-height: 24px;
+  min-width: 24px;
+}
+
+/* Inline links exempt per WCAG 2.5.8 exception for inline text */
+p a, li a, td a, figcaption a, span a {
+  min-height: auto;
+  min-width: auto;
 }
 
 /* Figures and images */
@@ -395,7 +428,7 @@ section {
 
 class WCAGHTMLEnhancer:
     """
-    Post-processor to enhance HTML for WCAG 2.1 AA compliance.
+    Post-processor to enhance HTML for WCAG 2.2 AA compliance.
 
     Usage:
         enhancer = WCAGHTMLEnhancer()
@@ -430,7 +463,7 @@ class WCAGHTMLEnhancer:
             options: Configuration options
 
         Returns:
-            Enhanced HTML string with WCAG 2.1 AA compliance
+            Enhanced HTML string with WCAG 2.2 AA compliance
         """
         if options is None:
             options = WCAGOptions()
@@ -516,11 +549,11 @@ class WCAGHTMLEnhancer:
             # Look for content container
             content = body.find('div', class_='content') or body.find('article')
             if content:
-                main = soup.new_tag('main', id='main-content', role='main')
+                main = soup.new_tag('main', id='main-content')
                 content.wrap(main)
             else:
                 # Wrap all body content except header/footer in main
-                main = soup.new_tag('main', id='main-content', role='main')
+                main = soup.new_tag('main', id='main-content')
 
                 # Collect elements to move
                 elements_to_wrap = []
@@ -543,7 +576,7 @@ class WCAGHTMLEnhancer:
                         main.append(elem.extract())
         else:
             main['id'] = main.get('id', 'main-content')
-            main['role'] = 'main'
+            # Note: <main> has implicit role="main" per HTML5, no need to add explicitly
 
         # Add role to header
         header = soup.find('header')
@@ -569,8 +602,8 @@ class WCAGHTMLEnhancer:
         h2_elements = main.find_all('h2')
 
         for h2 in h2_elements:
-            # Skip if already in a section
-            if h2.find_parent('section'):
+            # Skip if already in a section or inside nav/header/footer
+            if h2.find_parent('section') or h2.find_parent('nav') or h2.find_parent('header') or h2.find_parent('footer'):
                 continue
 
             # Generate ID for heading if not present
@@ -1240,6 +1273,10 @@ class WCAGHTMLEnhancer:
 
     def _inject_css(self, soup: BeautifulSoup, options: WCAGOptions) -> None:
         """Inject WCAG-compliant CSS styles."""
+        # Skip CSS injection if option is disabled (external CSS will be used)
+        if not options.inject_css:
+            return
+
         head = soup.find('head')
         if not head:
             head = soup.new_tag('head')
@@ -1300,7 +1337,7 @@ class WCAGHTMLEnhancer:
 
         p = soup.new_tag('p')
         p.string = ('This document has been enhanced for accessibility following '
-                   'WCAG 2.1 AA guidelines. It includes keyboard navigation, '
+                   'WCAG 2.2 AA guidelines. It includes keyboard navigation, '
                    'screen reader support, and adjustable display settings.')
         acc_div.append(p)
 
@@ -1313,7 +1350,7 @@ class WCAGHTMLEnhancer:
 
 def enhance_html_wcag(html: str, options: WCAGOptions = None) -> str:
     """
-    Convenience function to enhance HTML for WCAG 2.1 AA compliance.
+    Convenience function to enhance HTML for WCAG 2.2 AA compliance.
 
     Args:
         html: Input HTML string
@@ -1329,7 +1366,7 @@ def enhance_html_wcag(html: str, options: WCAGOptions = None) -> str:
 def enhance_html_file(input_path: str, output_path: str = None,
                       options: WCAGOptions = None) -> str:
     """
-    Enhance an HTML file for WCAG 2.1 AA compliance.
+    Enhance an HTML file for WCAG 2.2 AA compliance.
 
     Args:
         input_path: Path to input HTML file

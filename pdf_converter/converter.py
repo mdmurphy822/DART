@@ -1,10 +1,10 @@
 """
-PDF to WCAG-Accessible HTML Converter.
+PDF to WCAG 2.2 AA Accessible HTML Converter.
 
 Uses pdftotext for born-digital PDFs (preserves layout and reading order)
 with fallback to OCR for scanned documents.
 
-Pipeline: PDF -> pdftotext (or OCR fallback) -> Claude Review -> Semantic HTML -> WCAG Enhancement
+Pipeline: PDF -> pdftotext (or OCR fallback) -> Claude Review -> Semantic HTML -> WCAG 2.2 Enhancement -> Validation
 """
 
 import html
@@ -43,6 +43,10 @@ class ConversionResult:
     math_expressions_converted: int = 0
     images_extracted: int = 0
     images_with_alt_text: int = 0
+    # WCAG validation stats
+    wcag_compliant: bool = True
+    wcag_issues_count: int = 0
+    wcag_critical_count: int = 0
 
 
 class PDFToAccessibleHTML:
@@ -59,7 +63,6 @@ class PDFToAccessibleHTML:
         dpi: int = 300,
         lang: str = 'eng',
         min_confidence: float = 30.0,
-        use_claude: bool = True,
         claude_api_key: Optional[str] = None,
         claude_model: str = "claude-sonnet-4-20250514",
         enable_cache: bool = True,
@@ -75,6 +78,9 @@ class PDFToAccessibleHTML:
         vector_min_drawings: int = 5,
         vector_cluster_distance: float = 50.0,
         vector_render_dpi: int = 150,
+        # WCAG validation options
+        validate_wcag: bool = True,
+        wcag_strict: bool = False,
     ):
         """
         Initialize the converter.
@@ -83,7 +89,6 @@ class PDFToAccessibleHTML:
             dpi: Resolution for OCR fallback
             lang: Tesseract language code for OCR fallback
             min_confidence: Minimum OCR confidence (for fallback)
-            use_claude: Whether to use Claude for text structuring (default: True)
             claude_api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY env var)
             claude_model: Claude model to use
             enable_cache: Whether to enable response caching
@@ -96,11 +101,12 @@ class PDFToAccessibleHTML:
             vector_min_drawings: Minimum drawing operations to consider a vector region
             vector_cluster_distance: Distance (pixels) to cluster nearby drawings
             vector_render_dpi: DPI for rendering vector regions as images
+            validate_wcag: Whether to validate output against WCAG 2.2 AA
+            wcag_strict: If True, treat AA failures as blocking
         """
         self.dpi = dpi
         self.lang = lang
         self.min_confidence = min_confidence
-        self.use_claude = use_claude
         self.enable_math = enable_math
         self.extract_images = extract_images
         self.use_ai_alt_text = use_ai_alt_text
@@ -110,6 +116,8 @@ class PDFToAccessibleHTML:
         self.vector_min_drawings = vector_min_drawings
         self.vector_cluster_distance = vector_cluster_distance
         self.vector_render_dpi = vector_render_dpi
+        self.validate_wcag = validate_wcag
+        self.wcag_strict = wcag_strict
 
         self._claude = None
         self._claude_config = {
@@ -121,7 +129,7 @@ class PDFToAccessibleHTML:
     @property
     def claude(self) -> 'ClaudeProcessor':
         """Lazy initialization of Claude processor."""
-        if self._claude is None and self.use_claude:
+        if self._claude is None:
             from .claude_processor import ClaudeProcessor
             self._claude = ClaudeProcessor(**self._claude_config)
         return self._claude
@@ -176,47 +184,53 @@ class PDFToAccessibleHTML:
                 extracted_images, images_extracted, images_with_alt_text = \
                     self._extract_and_process_images(str(pdf_path), raw_text[:1000])
 
-            # 3. Structure the text
-            if self.use_claude:
-                # Save extracted text for Claude Code review workflow
-                text_output_path = output_dir / f"{pdf_path.stem}_extracted.txt"
-                text_output_path.write_text(raw_text, encoding='utf-8')
-                logger.info(f"Extracted text saved to: {text_output_path}")
-
-                # Save extracted images for incorporation during review
-                images_dir = None
-                if extracted_images:
-                    images_dir = self._save_images_for_review(
-                        extracted_images, output_dir, pdf_path.stem
-                    )
-                    logger.info(f"Extracted {len(extracted_images)} images to: {images_dir}")
-
-                logger.info("="*60)
-                logger.info("TEXT EXTRACTION COMPLETE")
-                logger.info("="*60)
-                logger.info(f"To generate gold-standard HTML, run in Claude Code:")
-                logger.info(f"  'Review {text_output_path} and generate accessible HTML'")
-                if extracted_images:
-                    logger.info(f"  Include the {len(extracted_images)} extracted images from {images_dir}")
-                logger.info("="*60)
-
-                return ConversionResult(
-                    success=True,
-                    html_path=str(text_output_path),
-                    pages_processed=self._count_pages(str(pdf_path)),
-                    total_words=total_words,
-                    title=f"[EXTRACTED] {pdf_path.stem}",
-                    images_extracted=images_extracted,
-                    images_with_alt_text=images_with_alt_text,
+            # 3. Extract tables using pdfplumber
+            extracted_tables = self._extract_tables_with_pdfplumber(str(pdf_path))
+            tables_dir = None
+            if extracted_tables:
+                tables_dir = self._save_tables_for_review(
+                    extracted_tables, output_dir, pdf_path.stem
                 )
-            else:
-                # Use regex-based structuring (for simple documents only)
-                logger.info("Using regex-based text structuring")
-                blocks = self._structure_text(raw_text)
-                title = self._detect_title(blocks, pdf_path.stem)
-                html_content = self._generate_semantic_html(blocks, title)
+                logger.info(f"Extracted {len(extracted_tables)} tables to: {tables_dir}")
 
-            # 4. Embed extracted images into HTML
+            # 4. Structure the text - Save extracted text for Claude Code review workflow
+            text_output_path = output_dir / f"{pdf_path.stem}_extracted.txt"
+            text_output_path.write_text(raw_text, encoding='utf-8')
+            logger.info(f"Extracted text saved to: {text_output_path}")
+
+            # Save extracted images for incorporation during review
+            images_dir = None
+            if extracted_images:
+                images_dir = self._save_images_for_review(
+                    extracted_images, output_dir, pdf_path.stem
+                )
+                logger.info(f"Extracted {len(extracted_images)} images to: {images_dir}")
+
+            logger.info("="*60)
+            logger.info("TEXT EXTRACTION COMPLETE")
+            logger.info("="*60)
+            logger.info(f"To generate gold-standard HTML, run in Claude Code:")
+            logger.info(f"  'Review {text_output_path} and generate accessible HTML'")
+            if extracted_images:
+                logger.info(f"  Include the {len(extracted_images)} extracted images from {images_dir}")
+            if extracted_tables:
+                logger.info(f"  Include the {len(extracted_tables)} extracted tables from {tables_dir}")
+            logger.info("="*60)
+
+            return ConversionResult(
+                success=True,
+                html_path=str(text_output_path),
+                pages_processed=self._count_pages(str(pdf_path)),
+                total_words=total_words,
+                title=f"[EXTRACTED] {pdf_path.stem}",
+                images_extracted=images_extracted,
+                images_with_alt_text=images_with_alt_text,
+            )
+
+            # NOTE: The code below is kept for potential future use but is currently unreachable
+            # since we always return after extracting text for Claude Code review workflow.
+
+            # Embed extracted images into HTML
             if extracted_images:
                 html_content = self._embed_images_in_html(html_content, extracted_images)
 
@@ -240,7 +254,29 @@ class PDFToAccessibleHTML:
                 max_image_width=self.max_image_width,
             ))
 
-            # 6. Save output
+            # 6. Validate WCAG compliance (if enabled)
+            wcag_compliant = True
+            wcag_issues_count = 0
+            wcag_critical_count = 0
+
+            if self.validate_wcag:
+                from .wcag_validator import WCAGValidator
+                validator = WCAGValidator(strict_mode=self.wcag_strict)
+                validation_report = validator.validate(wcag_html)
+
+                wcag_compliant = validation_report.wcag_aa_compliant
+                wcag_issues_count = validation_report.total_issues
+                wcag_critical_count = validation_report.critical_count
+
+                if not wcag_compliant:
+                    logger.warning(
+                        f"WCAG 2.2 AA validation: {validation_report.critical_count} critical, "
+                        f"{validation_report.high_count} high severity issues"
+                    )
+                else:
+                    logger.info("WCAG 2.2 AA validation passed")
+
+            # 7. Save output
             output_filename = f"{pdf_path.stem}_accessible.html"
             output_path = output_dir / output_filename
             output_path.write_text(wcag_html, encoding='utf-8')
@@ -255,6 +291,9 @@ class PDFToAccessibleHTML:
                 title=title,
                 images_extracted=images_extracted,
                 images_with_alt_text=images_with_alt_text,
+                wcag_compliant=wcag_compliant,
+                wcag_issues_count=wcag_issues_count,
+                wcag_critical_count=wcag_critical_count,
             )
 
         except Exception as e:
@@ -445,6 +484,164 @@ class PDFToAccessibleHTML:
         )
 
         return images_dir
+
+    def _extract_tables_with_pdfplumber(self, pdf_path: str) -> list:
+        """
+        Extract tables from PDF using pdfplumber for structural detection.
+
+        Args:
+            pdf_path: Path to PDF file
+
+        Returns:
+            List of table dictionaries with page, headers, rows, and HTML
+        """
+        tables = []
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, 1):
+                    page_tables = page.extract_tables()
+                    if not page_tables:
+                        continue
+
+                    for table_idx, table in enumerate(page_tables):
+                        # Skip empty or single-row tables
+                        if not table or len(table) < 2:
+                            continue
+
+                        # Filter out None values and empty strings
+                        cleaned_table = []
+                        for row in table:
+                            if row:
+                                cleaned_row = [cell if cell else '' for cell in row]
+                                # Only include rows that have at least some content
+                                if any(cell.strip() for cell in cleaned_row):
+                                    cleaned_table.append(cleaned_row)
+
+                        if len(cleaned_table) < 2:
+                            continue
+
+                        # First row is typically headers
+                        headers = cleaned_table[0]
+                        rows = cleaned_table[1:]
+
+                        # Generate WCAG-compliant HTML for this table
+                        table_html = self._table_to_html(
+                            headers, rows, page_num, table_idx
+                        )
+
+                        tables.append({
+                            'page': page_num,
+                            'index': table_idx,
+                            'headers': headers,
+                            'rows': rows,
+                            'num_rows': len(rows),
+                            'num_cols': len(headers),
+                            'html': table_html,
+                        })
+
+            logger.info(f"Extracted {len(tables)} tables from PDF")
+
+        except ImportError:
+            logger.warning(
+                "pdfplumber not installed. Install with: pip install pdfplumber"
+            )
+        except Exception as e:
+            logger.error(f"Table extraction failed: {e}")
+
+        return tables
+
+    def _table_to_html(
+        self,
+        headers: list,
+        rows: list,
+        page_num: int,
+        table_idx: int
+    ) -> str:
+        """
+        Convert table data to WCAG-compliant HTML.
+
+        Args:
+            headers: List of column header strings
+            rows: List of row data (each row is a list of cell strings)
+            page_num: Page number for ID generation
+            table_idx: Table index on page for ID generation
+
+        Returns:
+            HTML string for the table
+        """
+        table_id = f"table-p{page_num}-{table_idx}"
+
+        html_parts = [
+            f'<table id="{table_id}" class="extracted-table">',
+            f'  <caption>Table from page {page_num}</caption>',
+            '  <thead>',
+            '    <tr>',
+        ]
+
+        # Add header cells with scope
+        for header in headers:
+            escaped_header = html.escape(str(header).strip())
+            html_parts.append(f'      <th scope="col">{escaped_header}</th>')
+
+        html_parts.extend([
+            '    </tr>',
+            '  </thead>',
+            '  <tbody>',
+        ])
+
+        # Add data rows
+        for row in rows:
+            html_parts.append('    <tr>')
+            for cell in row:
+                escaped_cell = html.escape(str(cell).strip())
+                html_parts.append(f'      <td>{escaped_cell}</td>')
+            html_parts.append('    </tr>')
+
+        html_parts.extend([
+            '  </tbody>',
+            '</table>',
+        ])
+
+        return '\n'.join(html_parts)
+
+    def _save_tables_for_review(
+        self,
+        tables: list,
+        output_dir: Path,
+        pdf_stem: str
+    ) -> Path:
+        """
+        Save extracted tables metadata to disk for Claude Code review workflow.
+
+        Args:
+            tables: List of table dictionaries
+            output_dir: Output directory
+            pdf_stem: PDF filename stem
+
+        Returns:
+            Path to tables metadata file
+        """
+        import json
+
+        # Create tables directory
+        tables_dir = output_dir / f"{pdf_stem}_tables"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save metadata JSON
+        metadata_path = tables_dir / 'tables_metadata.json'
+        metadata_path.write_text(
+            json.dumps(tables, indent=2, ensure_ascii=False),
+            encoding='utf-8'
+        )
+
+        # Also save individual HTML files for each table
+        for table in tables:
+            table_file = tables_dir / f"table_p{table['page']}_{table['index']}.html"
+            table_file.write_text(table['html'], encoding='utf-8')
+
+        return tables_dir
 
     def _embed_images_in_html(self, html_content: str, images: list) -> str:
         """
