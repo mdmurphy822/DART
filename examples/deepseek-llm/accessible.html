@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek LLM: Scaling Open-Source Language Models with Longtermism</title>
+    <meta name="description" content="DeepSeek LLM introduces scaling laws for open-source language models, presenting 7B and 67B models that outperform LLaMA-2 70B across various benchmarks.">
+    <meta name="keywords" content="DeepSeek LLM, scaling laws, language models, LLM, pre-training, fine-tuning, DPO, SFT">
+    <meta name="author" content="DeepSeek-AI">
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1a1a1a;
+            --heading-color: #0d0d0d;
+            --link-color: #0066cc;
+            --link-hover: #004499;
+            --border-color: #e0e0e0;
+            --code-bg: #f5f5f5;
+            --table-header-bg: #f0f0f0;
+            --blockquote-bg: #f9f9f9;
+            --blockquote-border: #0066cc;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1a1a;
+                --text-color: #e0e0e0;
+                --heading-color: #ffffff;
+                --link-color: #66b3ff;
+                --link-hover: #99ccff;
+                --border-color: #404040;
+                --code-bg: #2d2d2d;
+                --table-header-bg: #2d2d2d;
+                --blockquote-bg: #252525;
+                --blockquote-border: #66b3ff;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+            html { scroll-behavior: auto !important; }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            font-size: 16px;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--heading-color);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+            scroll-margin-top: 80px;
+        }
+
+        h1 { font-size: 2rem; text-align: center; border-bottom: 3px solid var(--border-color); padding-bottom: 1rem; }
+        h2 { font-size: 1.6rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
+        h3 { font-size: 1.3rem; }
+        h4 { font-size: 1.1rem; }
+
+        p { margin-bottom: 1rem; text-align: justify; }
+
+        a { color: var(--link-color); text-decoration: none; }
+        a:hover, a:focus { color: var(--link-hover); text-decoration: underline; }
+
+        :focus { outline: 3px solid var(--link-color); outline-offset: 2px; }
+        :focus:not(:focus-visible) { outline: none; }
+        :focus-visible { outline: 3px solid var(--link-color); outline-offset: 2px; }
+        *:focus { scroll-margin-top: 80px; scroll-margin-bottom: 80px; }
+
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--link-color);
+            color: white;
+            padding: 8px;
+            z-index: 100;
+        }
+        .skip-link:focus { top: 0; }
+
+        .pdf-download {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+        .pdf-download a { font-weight: bold; font-size: 1.1rem; }
+
+        .authors { text-align: center; font-size: 0.85rem; margin-bottom: 2rem; line-height: 1.6; }
+        .metadata { font-size: 0.9rem; color: var(--text-color); opacity: 0.8; text-align: center; margin-bottom: 2rem; }
+
+        .abstract {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-left: 4px solid var(--blockquote-border);
+            margin: 2rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .abstract h2 { margin-top: 0; border-bottom: none; }
+
+        .toc {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+        .toc h2 { margin-top: 0; border-bottom: none; }
+        .toc ul { list-style-type: none; padding-left: 0; }
+        .toc li { margin-bottom: 0.3rem; }
+        .toc ul ul { padding-left: 1.5rem; margin-top: 0.3rem; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.9rem; }
+        th, td { border: 1px solid var(--border-color); padding: 0.5rem; text-align: left; vertical-align: top; }
+        th { background-color: var(--table-header-bg); font-weight: bold; }
+        caption { caption-side: bottom; padding: 0.75rem; font-style: italic; text-align: left; }
+
+        ul, ol { margin-bottom: 1rem; padding-left: 2rem; }
+        li { margin-bottom: 0.5rem; }
+
+        figure { margin: 2rem 0; text-align: center; }
+        figure img { max-width: 100%; height: auto; border: 1px solid var(--border-color); border-radius: 4px; }
+        figcaption { font-style: italic; margin-top: 0.75rem; font-size: 0.95rem; text-align: left; padding: 0 1rem; }
+
+        code { background-color: var(--code-bg); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 0.9rem; }
+        .math { font-style: italic; }
+        sub, sup { font-size: 0.75rem; }
+
+        .key-findings {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .references { font-size: 0.85rem; }
+        .references ol { padding-left: 2rem; }
+        .references li { margin-bottom: 0.5rem; }
+
+        @media (max-width: 600px) {
+            body { padding: 1rem; font-size: 15px; }
+            h1 { font-size: 1.6rem; }
+            h2 { font-size: 1.3rem; }
+            table { font-size: 0.8rem; }
+            th, td { padding: 0.4rem; }
+        }
+
+        @media print {
+            body { max-width: none; padding: 0; }
+            .pdf-download, .skip-link { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="pdf-download" role="complementary" aria-label="Download options">
+        <a href="attention.pdf" download aria-label="Download original PDF document">
+            Download Original PDF (arXiv:2401.02954)
+        </a>
+    </div>
+
+    <main id="main-content" role="main">
+        <article>
+            <header>
+                <h1>DeepSeek LLM: Scaling Open-Source Language Models with Longtermism</h1>
+                <p class="authors">
+                    Xiao Bi, Deli Chen, Guanting Chen, Shanhuang Chen, Damai Dai, Chengqi Deng,
+                    Honghui Ding, Kai Dong, Qiushi Du, Zhe Fu, Huazuo Gao, Kaige Gao, Wenjun Gao,
+                    Ruiqi Ge, Kang Guan, Daya Guo, Jianzhong Guo, Guangbo Hao, Zhewen Hao, Ying He,
+                    Wenjie Hu, Panpan Huang, Erhang Li, Guowei Li, Jiashi Li, Yao Li, Y.K. Li, Wenfeng Liang,
+                    Fangyun Lin, A.X. Liu, Bo Liu, Wen Liu, Xiaodong Liu, Xin Liu, Yiyuan Liu, Haoyu Lu,
+                    Shanghao Lu, Fuli Luo, Shirong Ma, Xiaotao Nie, Tian Pei, Yishi Piao, Junjie Qiu, Hui Qu,
+                    Tongzheng Ren, Zehui Ren, Chong Ruan, Zhangli Sha, Zhihong Shao, Junxiao Song,
+                    Xuecheng Su, Jingxiang Sun, Yaofeng Sun, Minghui Tang, Bingxuan Wang, Peiyi Wang,
+                    Shiyu Wang, Yaohui Wang, Yongji Wang, Tong Wu, Y. Wu, Xin Xie, Zhenda Xie, Ziwei Xie,
+                    Yiliang Xiong, Hanwei Xu, R.X. Xu, Yanhong Xu, Dejian Yang, Yuxiang You, Shuiping Yu,
+                    Xingkai Yu, B. Zhang, Haowei Zhang, Lecong Zhang, Liyue Zhang, Mingchuan Zhang,
+                    Minghua Zhang, Wentao Zhang, Yichao Zhang, Chenggang Zhao, Yao Zhao,
+                    Shangyan Zhou, Shunfeng Zhou, Qihao Zhu, Yuheng Zou
+                </p>
+                <p class="metadata">
+                    DeepSeek-AI<br>
+                    arXiv:2401.02954v1 [cs.CL] 5 Jan 2024
+                </p>
+            </header>
+
+            <section class="abstract" aria-labelledby="abstract-heading">
+                <h2 id="abstract-heading">Abstract</h2>
+                <p>
+                    The rapid development of open-source large language models (LLMs) has been truly remarkable. However, the scaling laws described in previous literature presents varying conclusions, which casts a dark cloud over scaling LLMs. We delve into the study of scaling laws and present our distinctive findings that facilitate the scaling of large scale models in two prevalent used open-source configurations, 7B and 67B. Guided by the scaling laws, we introduce DeepSeek LLM, a project dedicated to advancing open-source language models with a long-term perspective.
+                </p>
+                <p>
+                    To support the pre-training phase, we have developed a dataset that currently consists of 2 trillion tokens and is continuously expanding. We further conduct supervised fine-tuning (SFT) and direct preference optimization (DPO) on DeepSeek LLM Base models, resulting in the creation of DeepSeek Chat models. Our evaluation results demonstrate that DeepSeek LLM 67B surpasses LLaMA-2 70B across a range of benchmarks, especially in the domains of code, mathematics, and reasoning. Furthermore, open-ended evaluations reveal that our DeepSeek LLM 67B Chat exhibits superior performance compared to GPT-3.5.
+                </p>
+            </section>
+
+            <nav class="toc" aria-labelledby="toc-heading">
+                <h2 id="toc-heading">Table of Contents</h2>
+                <ul>
+                    <li><a href="#section-1">1. Introduction</a></li>
+                    <li><a href="#section-2">2. Pre-Training</a>
+                        <ul>
+                            <li><a href="#section-2-1">2.1 Data</a></li>
+                            <li><a href="#section-2-2">2.2 Architecture</a></li>
+                            <li><a href="#section-2-3">2.3 Hyperparameters</a></li>
+                            <li><a href="#section-2-4">2.4 Infrastructures</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#section-3">3. Scaling Laws</a>
+                        <ul>
+                            <li><a href="#section-3-1">3.1 Scaling Laws for Hyperparameters</a></li>
+                            <li><a href="#section-3-2">3.2 Estimating Optimal Model and Data Scaling</a></li>
+                            <li><a href="#section-3-3">3.3 Scaling Laws with Different Data</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#section-4">4. Alignment</a></li>
+                    <li><a href="#section-5">5. Evaluation</a></li>
+                    <li><a href="#section-6">6. Conclusion, Limitation, and Future Work</a></li>
+                </ul>
+            </nav>
+
+            <section id="section-1" aria-labelledby="heading-1">
+                <h2 id="heading-1">1. Introduction</h2>
+                <p>
+                    Over the past few years, Large Language Models (LLMs) based on decoder-only Transformers have increasingly become the cornerstone and pathway to achieving Artificial General Intelligence (AGI). By predicting the next word in continuous text, LLMs undergo self-supervised pre-training on massive datasets, enabling them to achieve various purposes and possess many abilities, such as novel creation, text summarization, code completion, and more. Subsequent developments like supervised fine-tuning and reward modeling have enabled Large Language Models (LLMs) to better follow user intentions and instructions.
+                </p>
+                <p>
+                    This wave is sparked with closed products, such as ChatGPT, Claude, and Bard, which are developed with extensive computational resources and substantial annotation costs. These products have significantly raised the community's expectations for the capabilities of open-source LLMs, consequently inspiring a series of work. Among these, the LLaMA series models stand out. It consolidates a range of works to create an efficient and stable architecture, building well-performing models ranging from 7B to 70B parameters.
+                </p>
+                <p>
+                    Following LLaMA, the open-source community has primarily focused on training fixed-size (7B, 13B, 34B, and 70B), high-quality models, often neglecting research exploration into LLM scaling laws. Nonetheless, research on scaling laws is of utmost importance, considering that the current open-source models are merely at the initial stage of Artificial General Intelligence (AGI) development.
+                </p>
+
+                <div class="key-findings" role="region" aria-label="Key contributions">
+                    <h3>Key Contributions</h3>
+                    <ul>
+                        <li>Established <strong>scaling laws for hyperparameters</strong>, providing an empirical framework for determining the optimal batch size and learning rate</li>
+                        <li>Adopted <strong>non-embedding FLOPs/token M</strong> instead of model parameters N to represent model scale, leading to more accurate scaling predictions</li>
+                        <li>Demonstrated that <strong>data quality impacts optimal scaling strategy</strong>: higher quality data means more compute budget should be allocated to model scaling</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="section-2" aria-labelledby="heading-2">
+                <h2 id="heading-2">2. Pre-Training</h2>
+
+                <section id="section-2-1" aria-labelledby="heading-2-1">
+                    <h3 id="heading-2-1">2.1 Data</h3>
+                    <p>
+                        Our main objective is to comprehensively enhance the richness and diversity of the dataset. We have organized our approach into three essential stages: <strong>deduplication</strong>, <strong>filtering</strong>, and <strong>remixing</strong>. The deduplication and remixing stages ensure a diverse representation of the data by sampling unique instances. The filtering stage enhances the density of information, thereby enabling more efficient and effective model training.
+                    </p>
+                    <p>
+                        We adopted an aggressive deduplication strategy, expanding the deduplication scope. Our analysis revealed that deduplicating the entire Common Crawl corpus results in higher removal of duplicate instances compared to deduplicating within a single dump.
+                    </p>
+
+                    <table role="table" aria-labelledby="table-1-caption">
+                        <caption id="table-1-caption">Table 1: Deduplication ratios for various Common Crawl dumps.</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Dumps Used</th>
+                                <th scope="col">1</th>
+                                <th scope="col">2</th>
+                                <th scope="col">6</th>
+                                <th scope="col">12</th>
+                                <th scope="col">16</th>
+                                <th scope="col">22</th>
+                                <th scope="col">41</th>
+                                <th scope="col">91</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Dedup Rate (%)</td>
+                                <td>22.2</td>
+                                <td>46.7</td>
+                                <td>55.7</td>
+                                <td>69.9</td>
+                                <td>75.7</td>
+                                <td>76.3</td>
+                                <td>81.6</td>
+                                <td>89.8</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>
+                        For our tokenizer, we implemented the Byte-level Byte-Pair Encoding (BBPE) algorithm. We set the number of conventional tokens in the vocabulary at 100,000 and configured the model's vocabulary size to 102,400 for training.
+                    </p>
+                </section>
+
+                <section id="section-2-2" aria-labelledby="heading-2-2">
+                    <h3 id="heading-2-2">2.2 Architecture</h3>
+                    <p>
+                        The micro design of DeepSeek LLM largely follows the design of LLaMA, adopting a Pre-Norm structure with RMSNorm function and using SwiGLU as the activation function for the Feed-Forward Network (FFN). It also incorporates Rotary Embedding for positional encoding. To optimize inference cost, the 67B model uses Grouped-Query Attention (GQA) instead of the traditional Multi-Head Attention (MHA).
+                    </p>
+
+                    <table role="table" aria-labelledby="table-2-caption">
+                        <caption id="table-2-caption">Table 2: Detailed specs of DeepSeek LLM family of models.</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Params</th>
+                                <th scope="col">n<sub>layers</sub></th>
+                                <th scope="col">d<sub>model</sub></th>
+                                <th scope="col">n<sub>heads</sub></th>
+                                <th scope="col">n<sub>kv_heads</sub></th>
+                                <th scope="col">Context</th>
+                                <th scope="col">Batch Size</th>
+                                <th scope="col">LR</th>
+                                <th scope="col">Tokens</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>7B</td>
+                                <td>30</td>
+                                <td>4096</td>
+                                <td>32</td>
+                                <td>32</td>
+                                <td>4096</td>
+                                <td>2304</td>
+                                <td>4.2e-4</td>
+                                <td>2.0T</td>
+                            </tr>
+                            <tr>
+                                <td>67B</td>
+                                <td>95</td>
+                                <td>8192</td>
+                                <td>64</td>
+                                <td>8</td>
+                                <td>4096</td>
+                                <td>4608</td>
+                                <td>3.2e-4</td>
+                                <td>2.0T</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section id="section-2-3" aria-labelledby="heading-2-3">
+                    <h3 id="heading-2-3">2.3 Hyperparameters</h3>
+                    <p>
+                        DeepSeek LLM is initialized with a standard deviation of 0.006 and trained using the AdamW optimizer with hyperparameters: β<sub>1</sub> = 0.9, β<sub>2</sub> = 0.95, and weight_decay = 0.1.
+                    </p>
+                    <p>
+                        A <strong>multi-step learning rate scheduler</strong> is employed during pre-training instead of the typical cosine scheduler. Specifically, the learning rate reaches its maximum value after 2000 warmup steps, then decreases to 31.6% of the maximum value after processing 80% of the training tokens, and further reduces to 10% of the maximum value after 90% of the tokens.
+                    </p>
+                    <p>
+                        The multi-step learning rate scheduler allows for the reuse of training from the first phase, offering unique convenience for continual training while maintaining performance essentially consistent with a cosine scheduler.
+                    </p>
+                </section>
+
+                <section id="section-2-4" aria-labelledby="heading-2-4">
+                    <h3 id="heading-2-4">2.4 Infrastructures</h3>
+                    <p>
+                        We use an efficient and light-weight training framework named HAI-LLM. Data parallelism, tensor parallelism, sequence parallelism, and 1F1B pipeline parallelism are integrated into this framework. We also leverage the flash attention technique to improve hardware utilization. ZeRO-1 is exploited to partition optimizer states over data parallel ranks.
+                    </p>
+                    <p>
+                        Model weights and optimizer states are saved every 5 minutes asynchronously, meaning we will lose no more than 5 minutes of training in the worst case of occasional hardware or network failures.
+                    </p>
+                </section>
+            </section>
+
+            <section id="section-3" aria-labelledby="heading-3">
+                <h2 id="heading-3">3. Scaling Laws</h2>
+                <p>
+                    Research on scaling laws predates the emergence of large language models. Scaling laws suggest that model performance can be predictably improved with increases in compute budget <span class="math">C</span>, model scale <span class="math">N</span>, and data scale <span class="math">D</span>. When model scale <span class="math">N</span> is represented by model parameters and data scale <span class="math">D</span> by the number of tokens, <span class="math">C</span> can be approximated as <span class="math">C = 6ND</span>.
+                </p>
+
+                <section id="section-3-1" aria-labelledby="heading-3-1">
+                    <h3 id="heading-3-1">3.1 Scaling Laws for Hyperparameters</h3>
+                    <p>
+                        We initially conducted a grid search for batch size and learning rate on small-scale experiments. The results demonstrate that the generalization error remains stable across a wide range of choices of batch sizes and learning rates, indicating that near-optimal performance can be achieved within a relatively wide parameter space.
+                    </p>
+                    <p>
+                        The fitting results reveal that the optimal batch size <span class="math">B</span> gradually increases with the increase in compute budget <span class="math">C</span>, while the optimal learning rate <span class="math">η</span> gradually decreases. The final formulae we fitted are:
+                    </p>
+                    <p style="text-align: center; background: var(--code-bg); padding: 1rem; border-radius: 8px;">
+                        <span class="math">η<sub>opt</sub> = 0.3118 · C<sup>-0.1250</sup></span><br><br>
+                        <span class="math">B<sub>opt</sub> = 0.2920 · C<sup>0.3271</sup></span>
+                    </p>
+                </section>
+
+                <section id="section-3-2" aria-labelledby="heading-3-2">
+                    <h3 id="heading-3-2">3.2 Estimating Optimal Model and Data Scaling</h3>
+                    <p>
+                        To represent the model scale more accurately, we utilized a new model scale representation, <strong>non-embedding FLOPs/token M</strong>, replacing the earlier-used model parameters <span class="math">N</span>, and substituted the approximate compute budget formula <span class="math">C = 6ND</span> with the more precise <span class="math">C = MD</span>.
+                    </p>
+                    <p>
+                        The specific formulae for the optimal model and data scaling are:
+                    </p>
+                    <p style="text-align: center; background: var(--code-bg); padding: 1rem; border-radius: 8px;">
+                        <span class="math">M<sub>opt</sub> = 0.1715 · C<sup>0.5243</sup></span><br><br>
+                        <span class="math">D<sub>opt</sub> = 5.8316 · C<sup>0.4757</sup></span>
+                    </p>
+                    <p>
+                        The results indicate that using small-scale experiments can accurately predict the performance of models with 1000× compute budget. This provides both confidence and guidance for training models on a larger scale.
+                    </p>
+                </section>
+
+                <section id="section-3-3" aria-labelledby="heading-3-3">
+                    <h3 id="heading-3-3">3.3 Scaling Laws with Different Data</h3>
+                    <p>
+                        We studied the scaling laws using three different datasets: early in-house data, current in-house data, and OpenWebText2. An interesting observation is that the optimal model/data scaling-up allocation strategy across these three datasets showed consistency with data quality.
+                    </p>
+
+                    <table role="table" aria-labelledby="table-4-caption">
+                        <caption id="table-4-caption">Table 4: Coefficients of model scaling and data scaling vary with training data distribution.</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Approach</th>
+                                <th scope="col">Coeff. a (N<sub>opt</sub> ∝ C<sup>a</sup>)</th>
+                                <th scope="col">Coeff. b (D<sub>opt</sub> ∝ C<sup>b</sup>)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>OpenAI (OpenWebText2)</td><td>0.73</td><td>0.27</td></tr>
+                            <tr><td>Chinchilla (MassiveText)</td><td>0.49</td><td>0.51</td></tr>
+                            <tr><td>Ours (Early Data)</td><td>0.450</td><td>0.550</td></tr>
+                            <tr><td>Ours (Current Data)</td><td>0.524</td><td>0.476</td></tr>
+                            <tr><td>Ours (OpenWebText2)</td><td>0.578</td><td>0.422</td></tr>
+                        </tbody>
+                    </table>
+
+                    <p>
+                        As data quality improves, the model scaling exponent <span class="math">a</span> gradually increases, while the data scaling exponent <span class="math">b</span> decreases, which suggests that the increased compute budget should be allocated more to the model instead of the data.
+                    </p>
+                </section>
+            </section>
+
+            <section id="section-4" aria-labelledby="heading-4">
+                <h2 id="heading-4">4. Alignment</h2>
+                <p>
+                    We collect around 1.5 million instruction data instances in English and Chinese, covering a wide range of helpfulness and harmlessness topics. Our helpful data contains 1.2 million instances, with a distribution of 31.2% for general language tasks, 46.6% for mathematical problems, and 22.2% for coding exercises. The safety data consists of 300K instances, covering various sensitive topics.
+                </p>
+                <p>
+                    Our alignment pipeline contains two stages:
+                </p>
+                <p>
+                    <strong>Supervised Fine-Tuning:</strong> We fine-tuned our 7B model with 4 epochs, but only 2 epochs for the 67B model, since we observed the overfitting problem is serious on the 67B model. We observed that GSM8K and HumanEval are improved consistently for the 7B model, while the 67B model hits the upper bound soon.
+                </p>
+                <p>
+                    <strong>DPO:</strong> To further enhance the model's ability, we used the direct preference optimization algorithm, which is proven to be a simple but effective method for LLM alignment. We found that DPO can strengthen the model's open-ended generation skill, while engendering little difference in performance among standard benchmarks.
+                </p>
+            </section>
+
+            <section id="section-5" aria-labelledby="heading-5">
+                <h2 id="heading-5">5. Evaluation</h2>
+                <p>
+                    We evaluate our models on a series of public benchmarks both in English and Chinese, including:
+                </p>
+                <ul>
+                    <li><strong>Multi-subject multiple-choice:</strong> MMLU, C-Eval, CMMLU</li>
+                    <li><strong>Language understanding and reasoning:</strong> HellaSwag, PIQA, ARC, OpenBookQA, BBH</li>
+                    <li><strong>Closed-book question answering:</strong> TriviaQA, NaturalQuestions</li>
+                    <li><strong>Reading comprehension:</strong> RACE, DROP, C3</li>
+                    <li><strong>Math:</strong> GSM8K, MATH, CMath</li>
+                    <li><strong>Code:</strong> HumanEval, MBPP</li>
+                </ul>
+
+                <table role="table" aria-labelledby="table-5-caption">
+                    <caption id="table-5-caption">Table 5: Main evaluation results comparing DeepSeek LLM with LLaMA-2.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Benchmark</th>
+                            <th scope="col">LLaMA2 7B</th>
+                            <th scope="col">DeepSeek 7B</th>
+                            <th scope="col">LLaMA2 70B</th>
+                            <th scope="col">DeepSeek 67B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>MMLU</td><td>45.8</td><td>48.2</td><td>69.0</td><td><strong>71.3</strong></td></tr>
+                        <tr><td>HellaSwag</td><td>75.6</td><td>75.4</td><td>84.0</td><td><strong>84.0</strong></td></tr>
+                        <tr><td>GSM8K</td><td>15.5</td><td>17.4</td><td>58.4</td><td><strong>63.4</strong></td></tr>
+                        <tr><td>MATH</td><td>2.5</td><td>6.0</td><td>13.5</td><td><strong>18.7</strong></td></tr>
+                        <tr><td>HumanEval</td><td>14.6</td><td>26.2</td><td>28.7</td><td><strong>42.7</strong></td></tr>
+                        <tr><td>MBPP</td><td>21.8</td><td>39.0</td><td>45.6</td><td><strong>57.4</strong></td></tr>
+                        <tr><td>BBH</td><td>38.5</td><td>39.5</td><td>62.9</td><td><strong>68.7</strong></td></tr>
+                        <tr><td>C-Eval</td><td>33.9</td><td>45.0</td><td>51.4</td><td><strong>66.1</strong></td></tr>
+                    </tbody>
+                </table>
+
+                <p>
+                    Despite DeepSeek models being pre-trained on 2T bilingual corpus, they show comparable performance on English language understanding benchmarks with LLaMA2 models. Furthermore, <strong>DeepSeek 67B achieves considerably better performance on MATH, GSM8K, HumanEval, MBPP, BBH, and Chinese benchmarks</strong> compared to LLaMA2 70B.
+                </p>
+            </section>
+
+            <section id="section-6" aria-labelledby="heading-6">
+                <h2 id="heading-6">6. Conclusion, Limitation, and Future Work</h2>
+                <p>
+                    In this paper, we have presented DeepSeek LLM, a project dedicated to advancing open-source language models with a long-term perspective. We have shared comprehensive studies of scaling laws and provided guidance for future large-scale model training.
+                </p>
+                <p>
+                    Our key findings demonstrate that:
+                </p>
+                <ul>
+                    <li>Scaling laws for hyperparameters can be established to determine optimal batch size and learning rate</li>
+                    <li>Non-embedding FLOPs/token provides a more accurate model scale representation</li>
+                    <li>Data quality significantly impacts the optimal model/data scaling-up allocation strategy</li>
+                    <li>DeepSeek LLM 67B surpasses LLaMA-2 70B across various benchmarks, especially in code, mathematics, and reasoning</li>
+                </ul>
+                <p>
+                    We will continue to pay close attention to the changes in data quality and its impact on scaling laws, and provide more analysis in future works.
+                </p>
+            </section>
+
+        </article>
+    </main>
+</body>
+</html>

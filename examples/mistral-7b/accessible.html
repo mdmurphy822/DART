@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mistral 7B - Jiang et al.</title>
+    <meta name="description" content="We introduce Mistral 7B, a 7-billion-parameter language model engineered for superior performance and efficiency, outperforming Llama 2 13B across all evaluated benchmarks.">
+    <meta name="keywords" content="Mistral 7B, language model, grouped-query attention, sliding window attention, LLM, NLP">
+    <meta name="author" content="Albert Q. Jiang, Alexandre Sablayrolles, Arthur Mensch, Chris Bamford, Devendra Singh Chaplot, Diego de las Casas, Florian Bressand, Gianna Lengyel, Guillaume Lample, Lucile Saulnier, Lelio Renard Lavaud, Marie-Anne Lachaux, Pierre Stock, Teven Le Scao, Thibaut Lavril, Thomas Wang, Timothee Lacroix, William El Sayed">
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1a1a1a;
+            --heading-color: #0d0d0d;
+            --link-color: #0066cc;
+            --link-hover: #004499;
+            --border-color: #e0e0e0;
+            --code-bg: #f5f5f5;
+            --table-header-bg: #f0f0f0;
+            --blockquote-bg: #f9f9f9;
+            --blockquote-border: #0066cc;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1a1a;
+                --text-color: #e0e0e0;
+                --heading-color: #ffffff;
+                --link-color: #66b3ff;
+                --link-hover: #99ccff;
+                --border-color: #404040;
+                --code-bg: #2d2d2d;
+                --table-header-bg: #2d2d2d;
+                --blockquote-bg: #252525;
+                --blockquote-border: #66b3ff;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+            html {
+                scroll-behavior: auto !important;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            font-size: 16px;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--heading-color);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+            scroll-margin-top: 80px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            text-align: center;
+            border-bottom: 3px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 {
+            font-size: 1.4rem;
+        }
+
+        h4 {
+            font-size: 1.2rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+
+        a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+
+        a:hover, a:focus {
+            color: var(--link-hover);
+            text-decoration: underline;
+        }
+
+        :focus {
+            outline: 3px solid var(--link-color);
+            outline-offset: 2px;
+        }
+        :focus:not(:focus-visible) {
+            outline: none;
+        }
+        :focus-visible {
+            outline: 3px solid var(--link-color);
+            outline-offset: 2px;
+        }
+
+        *:focus {
+            scroll-margin-top: 80px;
+            scroll-margin-bottom: 80px;
+        }
+
+        a:not(p a):not(li a):not(td a):not(figcaption a),
+        button,
+        [role="button"],
+        summary {
+            min-height: 24px;
+            min-width: 24px;
+        }
+
+        p a, li a, td a, figcaption a, span a {
+            min-height: auto;
+            min-width: auto;
+        }
+
+        .pdf-download {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .pdf-download a {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .authors {
+            text-align: center;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .abstract {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-left: 4px solid var(--blockquote-border);
+            margin: 2rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .abstract h2 {
+            margin-top: 0;
+            border-bottom: none;
+        }
+
+        .metadata {
+            font-size: 0.9rem;
+            color: var(--text-color);
+            opacity: 0.8;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 0.75rem;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background-color: var(--table-header-bg);
+            font-weight: bold;
+        }
+
+        caption {
+            caption-side: bottom;
+            padding: 0.75rem;
+            font-style: italic;
+            text-align: left;
+        }
+
+        ul, ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        figure {
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        figure img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        figcaption {
+            font-style: italic;
+            margin-top: 0.75rem;
+            font-size: 0.95rem;
+            text-align: left;
+            padding: 0 1rem;
+        }
+
+        code {
+            background-color: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .references {
+            font-size: 0.9rem;
+        }
+
+        .references ol {
+            padding-left: 2rem;
+        }
+
+        .references li {
+            margin-bottom: 0.75rem;
+        }
+
+        .toc {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+
+        .toc h2 {
+            margin-top: 0;
+            border-bottom: none;
+        }
+
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            margin-bottom: 0.3rem;
+        }
+
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--link-color);
+            color: white;
+            padding: 8px;
+            z-index: 100;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        .system-prompt {
+            background-color: var(--blockquote-bg);
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-style: italic;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 1rem;
+                font-size: 15px;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+            }
+            table {
+                font-size: 0.85rem;
+            }
+            th, td {
+                padding: 0.5rem;
+            }
+        }
+
+        @media print {
+            body {
+                max-width: none;
+                padding: 0;
+            }
+            .pdf-download, .skip-link {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="pdf-download" role="complementary" aria-label="Download options">
+        <a href="mistral.pdf" download aria-label="Download original PDF document">
+            Download Original PDF (arXiv:2310.06825)
+        </a>
+    </div>
+
+    <main id="main-content" role="main">
+        <article>
+            <header>
+                <h1>Mistral 7B</h1>
+                <p class="authors">
+                    <strong>Albert Q. Jiang</strong>, <strong>Alexandre Sablayrolles</strong>, <strong>Arthur Mensch</strong>, <strong>Chris Bamford</strong>,
+                    <strong>Devendra Singh Chaplot</strong>, <strong>Diego de las Casas</strong>, <strong>Florian Bressand</strong>, <strong>Gianna Lengyel</strong>,
+                    <strong>Guillaume Lample</strong>, <strong>Lucile Saulnier</strong>, <strong>Lelio Renard Lavaud</strong>, <strong>Marie-Anne Lachaux</strong>,
+                    <strong>Pierre Stock</strong>, <strong>Teven Le Scao</strong>, <strong>Thibaut Lavril</strong>, <strong>Thomas Wang</strong>, <strong>Timothee Lacroix</strong>,
+                    <strong>William El Sayed</strong>
+                </p>
+                <p class="metadata">
+                    arXiv:2310.06825v1 [cs.CL] 10 Oct 2023<br>
+                    Code: <a href="https://github.com/mistralai/mistral-src">github.com/mistralai/mistral-src</a><br>
+                    Webpage: <a href="https://mistral.ai/news/announcing-mistral-7b/">mistral.ai/news/announcing-mistral-7b</a>
+                </p>
+            </header>
+
+            <section class="abstract" aria-labelledby="abstract-heading">
+                <h2 id="abstract-heading">Abstract</h2>
+                <p>
+                    We introduce Mistral 7B, a 7-billion-parameter language model engineered for superior performance and efficiency. Mistral 7B outperforms the best open 13B model (Llama 2) across all evaluated benchmarks, and the best released 34B model (Llama 1) in reasoning, mathematics, and code generation. Our model leverages grouped-query attention (GQA) for faster inference, coupled with sliding window attention (SWA) to effectively handle sequences of arbitrary length with a reduced inference cost. We also provide a model fine-tuned to follow instructions, Mistral 7B - Instruct, that surpasses Llama 2 13B - chat model both on human and automated benchmarks. Our models are released under the Apache 2.0 license.
+                </p>
+            </section>
+
+            <nav class="toc" aria-labelledby="toc-heading">
+                <h2 id="toc-heading">Table of Contents</h2>
+                <ul>
+                    <li><a href="#section-1">1. Introduction</a></li>
+                    <li><a href="#section-2">2. Architectural Details</a></li>
+                    <li><a href="#section-3">3. Results</a></li>
+                    <li><a href="#section-4">4. Instruction Finetuning</a></li>
+                    <li><a href="#section-5">5. Adding Guardrails for Front-facing Applications</a></li>
+                    <li><a href="#section-6">6. Conclusion</a></li>
+                    <li><a href="#acknowledgements">Acknowledgements</a></li>
+                    <li><a href="#references">References</a></li>
+                </ul>
+            </nav>
+
+            <section id="section-1" aria-labelledby="heading-1">
+                <h2 id="heading-1">1. Introduction</h2>
+                <p>
+                    In the rapidly evolving domain of Natural Language Processing (NLP), the race towards higher model performance often necessitates an escalation in model size. However, this scaling tends to increase computational costs and inference latency, thereby raising barriers to deployment in practical, real-world scenarios. In this context, the search for balanced models delivering both high-level performance and efficiency becomes critically essential. Our model, Mistral 7B, demonstrates that a carefully designed language model can deliver high performance while maintaining an efficient inference. Mistral 7B outperforms the previous best 13B model (Llama 2) across all tested benchmarks, and surpasses the best 34B model (LLaMa 34B) in mathematics and code generation. Furthermore, Mistral 7B approaches the coding performance of Code-Llama 7B, without sacrificing performance on non-code related benchmarks.
+                </p>
+                <p>
+                    Mistral 7B leverages grouped-query attention (GQA), and sliding window attention (SWA). GQA significantly accelerates the inference speed, and also reduces the memory requirement during decoding, allowing for higher batch sizes hence higher throughput, a crucial factor for real-time applications. In addition, SWA is designed to handle longer sequences more effectively at a reduced computational cost, thereby alleviating a common limitation in LLMs. These attention mechanisms collectively contribute to the enhanced performance and efficiency of Mistral 7B.
+                </p>
+                <p>
+                    Mistral 7B is released under the Apache 2.0 license. This release is accompanied by a reference implementation facilitating easy deployment either locally or on cloud platforms such as AWS, GCP, or Azure using the vLLM inference server and SkyPilot. Integration with Hugging Face is also streamlined for easier integration. Moreover, Mistral 7B is crafted for ease of fine-tuning across a myriad of tasks. As a demonstration of its adaptability and superior performance, we present a chat model fine-tuned from Mistral 7B that significantly outperforms the Llama 2 13B - Chat model.
+                </p>
+                <p>
+                    Mistral 7B takes a significant step in balancing the goals of getting high performance while keeping large language models efficient. Through our work, our aim is to help the community create more affordable, efficient, and high-performing language models that can be used in a wide range of real-world applications.
+                </p>
+            </section>
+
+            <section id="section-2" aria-labelledby="heading-2">
+                <h2 id="heading-2">2. Architectural Details</h2>
+
+                <figure id="figure-1" aria-labelledby="fig1-caption">
+                    <img src="mistral_images/image_2_page_2.jpg" alt="Diagram showing sliding window attention mechanism where each token attends to W tokens from the previous layer. The diagram illustrates how information propagates forward through multiple attention layers." loading="lazy">
+                    <figcaption id="fig1-caption">
+                        <strong>Figure 1: Sliding Window Attention.</strong> The number of operations in vanilla attention is quadratic in the sequence length, and the memory increases linearly with the number of tokens. At inference time, this incurs higher latency and smaller throughput due to reduced cache availability. To alleviate this issue, we use sliding window attention: each token can attend to at most W tokens from the previous layer (here, W = 3). Note that tokens outside the sliding window still influence next word prediction. At each attention layer, information can move forward by W tokens. Hence, after k attention layers, information can move forward by up to k x W tokens.
+                    </figcaption>
+                </figure>
+
+                <p>
+                    Mistral 7B is based on a transformer architecture. The main parameters of the architecture are summarized in Table 1. Compared to Llama, it introduces a few changes that we summarize below.
+                </p>
+
+                <table role="table" aria-labelledby="table-1-caption">
+                    <caption id="table-1-caption">Table 1: Model architecture parameters for Mistral 7B.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Parameter</th>
+                            <th scope="col">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>dim</td><td>4096</td></tr>
+                        <tr><td>n_layers</td><td>32</td></tr>
+                        <tr><td>head_dim</td><td>128</td></tr>
+                        <tr><td>hidden_dim</td><td>14336</td></tr>
+                        <tr><td>n_heads</td><td>32</td></tr>
+                        <tr><td>n_kv_heads</td><td>8</td></tr>
+                        <tr><td>window_size</td><td>4096</td></tr>
+                        <tr><td>context_len</td><td>8192</td></tr>
+                        <tr><td>vocab_size</td><td>32000</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 id="heading-2-1">Sliding Window Attention</h3>
+                <p>
+                    SWA exploits the stacked layers of a transformer to attend information beyond the window size W. The hidden state in position i of the layer k, h<sub>i</sub>, attends to all hidden states from the previous layer with positions between i - W and i. Recursively, h<sub>i</sub> can access tokens from the input layer at a distance of up to W x k tokens, as illustrated in Figure 1. At the last layer, using a window size of W = 4096, we have a theoretical attention span of approximately 131K tokens. In practice, for a sequence length of 16K and W = 4096, changes made to FlashAttention and xFormers yield a 2x speed improvement over a vanilla attention baseline.
+                </p>
+
+                <h3 id="heading-2-2">Rolling Buffer Cache</h3>
+                <p>
+                    A fixed attention span means that we can limit our cache size using a rolling buffer cache. The cache has a fixed size of W, and the keys and values for the timestep i are stored in position i mod W of the cache. As a result, when the position i is larger than W, past values in the cache are overwritten, and the size of the cache stops increasing. On a sequence length of 32k tokens, this reduces the cache memory usage by 8x, without impacting the model quality.
+                </p>
+
+                <figure id="figure-2" aria-labelledby="fig2-caption">
+                    <img src="mistral_images/image_3_page_3.jpg" alt="Diagram showing rolling buffer cache with fixed size W=4, where keys and values are stored using modular arithmetic to overwrite old values." loading="lazy">
+                    <figcaption id="fig2-caption">
+                        <strong>Figure 2: Rolling buffer cache.</strong> The cache has a fixed size of W = 4. Keys and values for position i are stored in position i mod W of the cache. When the position i is larger than W, past values in the cache are overwritten. The hidden state corresponding to the latest generated tokens are colored in orange.
+                    </figcaption>
+                </figure>
+
+                <h3 id="heading-2-3">Pre-fill and Chunking</h3>
+                <p>
+                    When generating a sequence, we need to predict tokens one-by-one, as each token is conditioned on the previous ones. However, the prompt is known in advance, and we can pre-fill the (k, v) cache with the prompt. If the prompt is very large, we can chunk it into smaller pieces, and pre-fill the cache with each chunk. For this purpose, we can select the window size as our chunk size. For each chunk, we thus need to compute the attention over the cache and over the chunk.
+                </p>
+
+                <figure id="figure-3" aria-labelledby="fig3-caption">
+                    <img src="mistral_images/image_4_page_3.jpg" alt="Attention mask diagram showing pre-fill and chunking mechanism for sequence processing in three chunks with causal masking and sliding window attention." loading="lazy">
+                    <figcaption id="fig3-caption">
+                        <strong>Figure 3: Pre-fill and chunking.</strong> During pre-fill of the cache, long sequences are chunked to limit memory usage. We process a sequence in three chunks, "The cat sat on", "the mat and saw", "the dog go to". The figure shows what happens for the third chunk ("the dog go to"): it attends itself using a causal mask (rightmost block), attends the cache using a sliding window (center block), and does not attend to past tokens as they are outside of the sliding window (left block).
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section id="section-3" aria-labelledby="heading-3">
+                <h2 id="heading-3">3. Results</h2>
+                <p>
+                    We compare Mistral 7B to Llama, and re-run all benchmarks with our own evaluation pipeline for fair comparison. We measure performance on a wide variety of tasks categorized as follows:
+                </p>
+                <ul>
+                    <li><strong>Commonsense Reasoning (0-shot):</strong> Hellaswag, Winogrande, PIQA, SIQA, OpenbookQA, ARC-Easy, ARC-Challenge, CommonsenseQA</li>
+                    <li><strong>World Knowledge (5-shot):</strong> NaturalQuestions, TriviaQA</li>
+                    <li><strong>Reading Comprehension (0-shot):</strong> BoolQ, QuAC</li>
+                    <li><strong>Math:</strong> GSM8K (8-shot) with maj@8 and MATH (4-shot) with maj@4</li>
+                    <li><strong>Code:</strong> Humaneval (0-shot) and MBPP (3-shot)</li>
+                    <li><strong>Popular aggregated results:</strong> MMLU (5-shot), BBH (3-shot), and AGI Eval (3-5-shot, English multiple-choice questions only)</li>
+                </ul>
+
+                <figure id="figure-4" aria-labelledby="fig4-caption">
+                    <img src="mistral_images/image_5_page_4.jpg" alt="Bar chart comparing performance of Mistral 7B against Llama 2 7B, Llama 2 13B, and Llama 1 34B across multiple benchmarks including MMLU, Knowledge, Reasoning, Comprehension, AGI Eval, Math, BBH, and Code." loading="lazy">
+                    <figcaption id="fig4-caption">
+                        <strong>Figure 4: Performance of Mistral 7B and different Llama models on a wide range of benchmarks.</strong> All models were re-evaluated on all metrics with our evaluation pipeline for accurate comparison. Mistral 7B significantly outperforms Llama 2 7B and Llama 2 13B on all benchmarks. It is also vastly superior to Llama 1 34B in mathematics, code generation, and reasoning benchmarks.
+                    </figcaption>
+                </figure>
+
+                <table role="table" aria-labelledby="table-2-caption">
+                    <caption id="table-2-caption">Table 2: Comparison of Mistral 7B with Llama. Mistral 7B outperforms Llama 2 13B on all metrics, and approaches the code performance of Code-Llama 7B without sacrificing performance on non-code benchmarks.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Model</th>
+                            <th scope="col">Modality</th>
+                            <th scope="col">MMLU</th>
+                            <th scope="col">HellaSwag</th>
+                            <th scope="col">WinoG</th>
+                            <th scope="col">PIQA</th>
+                            <th scope="col">Arc-e</th>
+                            <th scope="col">Arc-c</th>
+                            <th scope="col">NQ</th>
+                            <th scope="col">TriviaQA</th>
+                            <th scope="col">HumanEval</th>
+                            <th scope="col">MBPP</th>
+                            <th scope="col">MATH</th>
+                            <th scope="col">GSM8K</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>LLaMA 2 7B</td>
+                            <td>Pretrained</td>
+                            <td>44.4%</td>
+                            <td>77.1%</td>
+                            <td>69.5%</td>
+                            <td>77.9%</td>
+                            <td>68.7%</td>
+                            <td>43.2%</td>
+                            <td>24.7%</td>
+                            <td>63.8%</td>
+                            <td>11.6%</td>
+                            <td>26.1%</td>
+                            <td>3.9%</td>
+                            <td>16.0%</td>
+                        </tr>
+                        <tr>
+                            <td>LLaMA 2 13B</td>
+                            <td>Pretrained</td>
+                            <td>55.6%</td>
+                            <td>80.7%</td>
+                            <td>72.9%</td>
+                            <td>80.8%</td>
+                            <td>75.2%</td>
+                            <td>48.8%</td>
+                            <td>29.0%</td>
+                            <td>69.6%</td>
+                            <td>18.9%</td>
+                            <td>35.4%</td>
+                            <td>6.0%</td>
+                            <td>34.3%</td>
+                        </tr>
+                        <tr>
+                            <td>Code-Llama 7B</td>
+                            <td>Finetuned</td>
+                            <td>36.9%</td>
+                            <td>62.9%</td>
+                            <td>62.3%</td>
+                            <td>72.8%</td>
+                            <td>59.4%</td>
+                            <td>34.5%</td>
+                            <td>11.0%</td>
+                            <td>34.9%</td>
+                            <td>31.1%</td>
+                            <td>52.5%</td>
+                            <td>5.2%</td>
+                            <td>20.8%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Mistral 7B</strong></td>
+                            <td>Pretrained</td>
+                            <td><strong>60.1%</strong></td>
+                            <td><strong>81.3%</strong></td>
+                            <td><strong>75.3%</strong></td>
+                            <td><strong>83.0%</strong></td>
+                            <td><strong>80.0%</strong></td>
+                            <td><strong>55.5%</strong></td>
+                            <td><strong>28.8%</strong></td>
+                            <td><strong>69.9%</strong></td>
+                            <td>30.5%</td>
+                            <td>47.5%</td>
+                            <td><strong>13.1%</strong></td>
+                            <td><strong>52.2%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 id="heading-3-1">Size and Efficiency</h3>
+                <p>
+                    We computed "equivalent model sizes" of the Llama 2 family, aiming to understand Mistral 7B models' efficiency in the cost-performance spectrum. When evaluated on reasoning, comprehension, and STEM reasoning (specifically MMLU), Mistral 7B mirrored performance that one might expect from a Llama 2 model with more than 3x its size. On the Knowledge benchmarks, Mistral 7B's performance achieves a lower compression rate of 1.9x, which is likely due to its limited parameter count that restricts the amount of knowledge it can store.
+                </p>
+
+                <figure id="figure-5" aria-labelledby="fig5-caption">
+                    <img src="mistral_images/image_8_page_5.jpg" alt="Four charts showing results on MMLU, commonsense reasoning, world knowledge and reading comprehension comparing Mistral 7B against Llama 2 models of various sizes, demonstrating that Mistral 7B achieves equivalent performance to much larger models." loading="lazy">
+                    <figcaption id="fig5-caption">
+                        <strong>Figure 5: Results on MMLU, commonsense reasoning, world knowledge and reading comprehension for Mistral 7B and Llama 2 (7B/13B/70B).</strong> Mistral 7B largely outperforms Llama 2 13B on all evaluations, except on knowledge benchmarks, where it is on par (this is likely due to its limited parameter count, which limits the amount of knowledge it can compress).
+                    </figcaption>
+                </figure>
+
+                <h3 id="heading-3-2">Evaluation Differences</h3>
+                <p>
+                    On some benchmarks, there are some differences between our evaluation protocol and the one reported in the Llama 2 paper: 1) on MBPP, we use the hand-verified subset 2) on TriviaQA, we do not provide Wikipedia contexts.
+                </p>
+            </section>
+
+            <section id="section-4" aria-labelledby="heading-4">
+                <h2 id="heading-4">4. Instruction Finetuning</h2>
+                <p>
+                    To evaluate the generalization capabilities of Mistral 7B, we fine-tuned it on instruction datasets publicly available on the Hugging Face repository. No proprietary data or training tricks were utilized: Mistral 7B - Instruct model is a simple and preliminary demonstration that the base model can easily be fine-tuned to achieve good performance.
+                </p>
+
+                <table role="table" aria-labelledby="table-3-caption">
+                    <caption id="table-3-caption">Table 3: Comparison of Chat models. Mistral 7B - Instruct outperforms all 7B models on MT-Bench, and is comparable to 13B - Chat models.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Model</th>
+                            <th scope="col">Chatbot Arena ELO Rating</th>
+                            <th scope="col">MT Bench</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>WizardLM 13B v1.2</td><td>1047</td><td>7.2</td></tr>
+                        <tr><td><strong>Mistral 7B Instruct</strong></td><td>1031</td><td>6.84 +/- 0.07</td></tr>
+                        <tr><td>Llama 2 13B Chat</td><td>1012</td><td>6.65</td></tr>
+                        <tr><td>Vicuna 13B</td><td>1041</td><td>6.57</td></tr>
+                        <tr><td>Llama 2 7B Chat</td><td>985</td><td>6.27</td></tr>
+                        <tr><td>Vicuna 7B</td><td>997</td><td>6.17</td></tr>
+                        <tr><td>Alpaca 13B</td><td>914</td><td>4.53</td></tr>
+                    </tbody>
+                </table>
+
+                <p>
+                    We observe that the resulting model, Mistral 7B - Instruct, exhibits superior performance compared to all 7B models on MT-Bench, and is comparable to 13B - Chat models. An independent human evaluation was conducted on llmboxing.com/leaderboard. In this evaluation, participants were provided with a set of questions along with anonymous responses from two models and were asked to select their preferred response. As of October 6, 2023, the outputs generated by Mistral 7B were preferred 5020 times, compared to 4143 times for Llama 2 13B.
+                </p>
+            </section>
+
+            <section id="section-5" aria-labelledby="heading-5">
+                <h2 id="heading-5">5. Adding Guardrails for Front-facing Applications</h2>
+                <p>
+                    The ability to enforce guardrails when it comes to AI generation is important for front-facing applications. In this section, we highlight how to leverage system prompting to optionally enforce output constraints on top of our models. Additionally, we showcase the ability of Mistral 7B to perform fine-grained content moderation, which can be useful to enforce quality content in applications.
+                </p>
+
+                <h3 id="heading-5-1">5.1 System prompt to enforce guardrails</h3>
+                <p>
+                    We introduce a system prompt to guide the model to generate answers within specified guardrails, similar to the work done with Llama 2. Using this prompt allows the user to move on the Pareto front of model utility / guardrails enforcement.
+                </p>
+                <div class="system-prompt" role="region" aria-label="Recommended system prompt">
+                    Always assist with care, respect, and truth. Respond with utmost utility yet securely. Avoid harmful, unethical, prejudiced, or negative content. Ensure replies promote fairness and positivity.
+                </div>
+                <p>
+                    We use a set of 175 unsafe prompts for evaluating safety. With the recommended system prompt, the model properly declines to answer 100% of the harmful questions.
+                </p>
+
+                <table role="table" aria-labelledby="table-4-caption">
+                    <caption id="table-4-caption">Table 4: System prompts. Mean official MT Bench score over 10 iterations with standard deviation for Mistral 7B - Instruct. For reference, Llama 2 13B - Chat reports official results of 6.65.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Guardrails</th>
+                            <th scope="col">MT Bench</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>No system prompt</td><td>6.84 +/- 0.07</td></tr>
+                        <tr><td>Llama 2 system prompt</td><td>6.38 +/- 0.07</td></tr>
+                        <tr><td>Mistral system prompt</td><td>6.58 +/- 0.05</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 id="heading-5-2">5.2 Content moderation with self-reflection</h3>
+                <p>
+                    Mistral 7B - Instruct can be used as a content moderator: the model itself is able to accurately classify a user prompt or its generated answer as being either acceptable or falling into one of the following categories: Illegal activities such as terrorism, child abuse or fraud; Hateful, harassing or violent content such as discrimination, self-harm or bullying; Unqualified advice for instance in legal, medical or financial domains.
+                </p>
+                <p>
+                    To do so, we designed a self-reflection prompt that makes Mistral 7B classify a prompt or a generated answer. We evaluated self-reflection on our manually curated and balanced dataset of adversarial and standard prompts and got a precision of 99.4% for a recall of 95.6% (considering acceptable prompts as positives).
+                </p>
+                <p>
+                    The use cases are vast, from moderating comments on social media or forums to brand monitoring on the internet. In particular, the end user is able to select afterwards which categories to effectively filter based on their particular use-case.
+                </p>
+            </section>
+
+            <section id="section-6" aria-labelledby="heading-6">
+                <h2 id="heading-6">6. Conclusion</h2>
+                <p>
+                    Our work on Mistral 7B demonstrates that language models may compress knowledge more than what was previously thought. This opens up interesting perspectives: the field has so far put the emphasis on scaling laws in 2 dimensions (directly associating model capabilities to training cost); the problem is rather 3 dimensional (model capabilities, training cost, inference cost), and much remains to be explored to obtain the best performance with the smallest possible model.
+                </p>
+            </section>
+
+            <section id="acknowledgements" aria-labelledby="acknowledgements-heading">
+                <h2 id="acknowledgements-heading">Acknowledgements</h2>
+                <p>
+                    We are grateful to CoreWeave for their 24/7 help in marshalling our cluster. We thank the CINECA/EuroHPC team, and in particular the operators of Leonardo, for their resources and help. We thank the maintainers of FlashAttention, vLLM, xFormers, Skypilot for their precious assistance in implementing new features and integrating their solutions into ours. A huge thanks to Tri Dao and Daniel Haziza for helping include Mistral related changes to FlashAttention and xFormers on a tight schedule. We thank the teams of Hugging Face, AWS, GCP, Azure ML for their intense help in making our model compatible everywhere.
+                </p>
+
+                <figure id="figure-6" aria-labelledby="fig6-caption">
+                    <img src="mistral_images/image_10_page_7.jpg" alt="Screenshot of human evaluation interface from llmboxing.com showing a comparison between Mistral 7B Instruct and Llama 2 13B Chat responses to a question about quantum physics book recommendations. Mistral's response recommends 'The Quantum Universe' with detailed description while Llama recommends 'The Feynman Lectures on Physics' with less specificity." loading="lazy">
+                    <figcaption id="fig6-caption">
+                        <strong>Figure 6: Human evaluation of Mistral 7B - Instruct vs Llama 2 13B - Chat Example.</strong> An example of human evaluation from llmboxing.com. The question asks for recommendations of books in quantum physics. Llama 2 13B - Chat recommends a general physics book, while Mistral 7B - Instruct recommends a more relevant book on quantum physics and describes the contents in more detail.
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section id="references" class="references" aria-labelledby="references-heading">
+                <h2 id="references-heading">References</h2>
+                <ol>
+                    <li id="ref-1">Joshua Ainslie, James Lee-Thorp, Michiel de Jong, Yury Zemlyanskiy, Federico Lebron, and Sumit Sanghai. GQA: Training generalized multi-query transformer models from multi-head checkpoints. <em>arXiv preprint arXiv:2305.13245</em>, 2023.</li>
+                    <li id="ref-2">Jacob Austin, Augustus Odena, Maxwell Nye, Maarten Bosma, Henryk Michalewski, David Dohan, Ellen Jiang, Carrie Cai, Michael Terry, Quoc Le, et al. Program synthesis with large language models. <em>arXiv preprint arXiv:2108.07732</em>, 2021.</li>
+                    <li id="ref-3">Iz Beltagy, Matthew E Peters, and Arman Cohan. Longformer: The long-document transformer. <em>arXiv preprint arXiv:2004.05150</em>, 2020.</li>
+                    <li id="ref-4">Yonatan Bisk, Rowan Zellers, Jianfeng Gao, Yejin Choi, et al. PIQA: Reasoning about physical commonsense in natural language. In <em>Proceedings of the AAAI conference on artificial intelligence</em>, 2020.</li>
+                    <li id="ref-5">Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, et al. Evaluating large language models trained on code. <em>arXiv preprint arXiv:2107.03374</em>, 2021.</li>
+                    <li id="ref-6">Rewon Child, Scott Gray, Alec Radford, and Ilya Sutskever. Generating long sequences with sparse transformers. <em>arXiv preprint arXiv:1904.10509</em>, 2019.</li>
+                    <li id="ref-7">Eunsol Choi, He He, Mohit Iyyer, Mark Yatskar, Wen-tau Yih, Yejin Choi, Percy Liang, and Luke Zettlemoyer. QuAC: Question answering in context. <em>arXiv preprint arXiv:1808.07036</em>, 2018.</li>
+                    <li id="ref-8">Christopher Clark, Kenton Lee, Ming-Wei Chang, Tom Kwiatkowski, Michael Collins, and Kristina Toutanova. BoolQ: Exploring the surprising difficulty of natural yes/no questions. <em>arXiv preprint arXiv:1905.10044</em>, 2019.</li>
+                    <li id="ref-9">Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? Try ARC, the AI2 reasoning challenge. <em>arXiv preprint arXiv:1803.05457</em>, 2018.</li>
+                    <li id="ref-10">Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, et al. Training verifiers to solve math word problems. <em>arXiv preprint arXiv:2110.14168</em>, 2021.</li>
+                    <li id="ref-11">Tri Dao, Daniel Y. Fu, Stefano Ermon, Atri Rudra, and Christopher Re. FlashAttention: Fast and memory-efficient exact attention with IO-awareness. In <em>Advances in Neural Information Processing Systems</em>, 2022.</li>
+                    <li id="ref-12">Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. <em>arXiv preprint arXiv:2009.03300</em>, 2020.</li>
+                    <li id="ref-13">Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. Measuring mathematical problem solving with the MATH dataset. <em>arXiv preprint arXiv:2103.03874</em>, 2021.</li>
+                    <li id="ref-14">Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, et al. An empirical analysis of compute-optimal large language model training. In <em>Advances in Neural Information Processing Systems</em>, volume 35, 2022.</li>
+                    <li id="ref-15">Mandar Joshi, Eunsol Choi, Daniel S Weld, and Luke Zettlemoyer. TriviaQA: A large scale distantly supervised challenge dataset for reading comprehension. <em>arXiv preprint arXiv:1705.03551</em>, 2017.</li>
+                    <li id="ref-16">Tom Kwiatkowski, Jennimaria Palomaki, Olivia Redfield, et al. Natural questions: a benchmark for question answering research. <em>Transactions of the Association for Computational Linguistics</em>, 7:453-466, 2019.</li>
+                    <li id="ref-17">Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, et al. Efficient memory management for large language model serving with pagedattention. In <em>Proceedings of the ACM SIGOPS 29th Symposium on Operating Systems Principles</em>, 2023.</li>
+                    <li id="ref-18">Benjamin Lefaudeux, Francisco Massa, Diana Liskovich, Wenhan Xiong, et al. xformers: A modular and hackable transformer modelling library. <a href="https://github.com/facebookresearch/xformers">https://github.com/facebookresearch/xformers</a>, 2022.</li>
+                    <li id="ref-19">Todor Mihaylov, Peter Clark, Tushar Khot, and Ashish Sabharwal. Can a suit of armor conduct electricity? A new dataset for open book question answering. <em>arXiv preprint arXiv:1809.02789</em>, 2018.</li>
+                    <li id="ref-20">Baptiste Roziere, Jonas Gehring, Fabian Gloeckle, Sten Sootla, et al. Code llama: Open foundation models for code. <em>arXiv preprint arXiv:2308.12950</em>, 2023.</li>
+                    <li id="ref-21">Keisuke Sakaguchi, Ronan Le Bras, Chandra Bhagavatula, and Yejin Choi. Winogrande: An adversarial winograd schema challenge at scale. <em>Communications of the ACM</em>, 64(9):99-106, 2021.</li>
+                    <li id="ref-22">Maarten Sap, Hannah Rashkin, Derek Chen, Ronan LeBras, and Yejin Choi. SocialIQA: Commonsense reasoning about social interactions. <em>arXiv preprint arXiv:1904.09728</em>, 2019.</li>
+                    <li id="ref-23">Mirac Suzgun, Nathan Scales, Nathanael Scharli, Sebastian Gehrmann, et al. Challenging big-bench tasks and whether chain-of-thought can solve them. <em>arXiv preprint arXiv:2210.09261</em>, 2022.</li>
+                    <li id="ref-24">Alon Talmor, Jonathan Herzig, Nicholas Lourie, and Jonathan Berant. CommonsenseQA: A question answering challenge targeting commonsense knowledge. <em>arXiv preprint arXiv:1811.00937</em>, 2018.</li>
+                    <li id="ref-25">Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, et al. LLaMA: Open and efficient foundation language models. <em>arXiv preprint arXiv:2302.13971</em>, 2023.</li>
+                    <li id="ref-26">Hugo Touvron, Louis Martin, Kevin Stone, Peter Albert, et al. Llama 2: Open foundation and fine-tuned chat models. <em>arXiv preprint arXiv:2307.09288</em>, 2023.</li>
+                    <li id="ref-27">Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. <em>Advances in neural information processing systems</em>, 30, 2017.</li>
+                    <li id="ref-28">Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. HellaSwag: Can a machine really finish your sentence? <em>arXiv preprint arXiv:1905.07830</em>, 2019.</li>
+                    <li id="ref-29">Wanjun Zhong, Ruixiang Cui, Yiduo Guo, Yaobo Liang, et al. AGIEval: A human-centric benchmark for evaluating foundation models. <em>arXiv preprint arXiv:2304.06364</em>, 2023.</li>
+                </ol>
+            </section>
+
+        </article>
+    </main>
+</body>
+</html>

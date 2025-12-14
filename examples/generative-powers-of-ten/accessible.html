@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative Powers of Ten - Wang et al.</title>
+    <meta name="description" content="A method that uses a text-to-image model to generate consistent content across multiple image scales, enabling extreme semantic zooms into a scene.">
+    <meta name="keywords" content="diffusion models, text-to-image, multi-scale generation, zoom videos, Imagen, Powers of Ten">
+    <meta name="author" content="Xiaojuan Wang, Janne Kontkanen, Brian Curless, Steven M. Seitz, Ira Kemelmacher-Shlizerman, Ben Mildenhall, Pratul Srinivasan, Dor Verbin, Aleksander Holynski">
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1a1a1a;
+            --heading-color: #0d0d0d;
+            --link-color: #0066cc;
+            --link-hover: #004499;
+            --border-color: #e0e0e0;
+            --code-bg: #f5f5f5;
+            --table-header-bg: #f0f0f0;
+            --blockquote-bg: #f9f9f9;
+            --blockquote-border: #0066cc;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1a1a;
+                --text-color: #e0e0e0;
+                --heading-color: #ffffff;
+                --link-color: #66b3ff;
+                --link-hover: #99ccff;
+                --border-color: #404040;
+                --code-bg: #2d2d2d;
+                --table-header-bg: #2d2d2d;
+                --blockquote-bg: #252525;
+                --blockquote-border: #66b3ff;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+            html { scroll-behavior: auto !important; }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            font-size: 16px;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--heading-color);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+            scroll-margin-top: 80px;
+        }
+
+        h1 { font-size: 2.2rem; text-align: center; border-bottom: 3px solid var(--border-color); padding-bottom: 1rem; }
+        h2 { font-size: 1.8rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
+        h3 { font-size: 1.4rem; }
+        h4 { font-size: 1.2rem; }
+
+        p { margin-bottom: 1rem; text-align: justify; }
+
+        a { color: var(--link-color); text-decoration: none; }
+        a:hover, a:focus { color: var(--link-hover); text-decoration: underline; }
+
+        :focus { outline: 3px solid var(--link-color); outline-offset: 2px; }
+        :focus:not(:focus-visible) { outline: none; }
+        :focus-visible { outline: 3px solid var(--link-color); outline-offset: 2px; }
+        *:focus { scroll-margin-top: 80px; scroll-margin-bottom: 80px; }
+
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--link-color);
+            color: white;
+            padding: 8px;
+            z-index: 100;
+        }
+        .skip-link:focus { top: 0; }
+
+        .pdf-download {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+        .pdf-download a { font-weight: bold; font-size: 1.1rem; }
+
+        .authors { text-align: center; font-size: 1rem; margin-bottom: 2rem; line-height: 1.6; }
+        .affiliations { text-align: center; font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-color); opacity: 0.8; }
+        .metadata { font-size: 0.9rem; color: var(--text-color); opacity: 0.8; text-align: center; margin-bottom: 2rem; }
+
+        .abstract {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-left: 4px solid var(--blockquote-border);
+            margin: 2rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .abstract h2 { margin-top: 0; border-bottom: none; }
+
+        .toc {
+            background-color: var(--blockquote-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+        .toc h2 { margin-top: 0; border-bottom: none; }
+        .toc ul { list-style-type: none; padding-left: 0; }
+        .toc li { margin-bottom: 0.3rem; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.95rem; }
+        th, td { border: 1px solid var(--border-color); padding: 0.75rem; text-align: left; vertical-align: top; }
+        th { background-color: var(--table-header-bg); font-weight: bold; }
+        caption { caption-side: bottom; padding: 0.75rem; font-style: italic; text-align: left; }
+
+        ul, ol { margin-bottom: 1rem; padding-left: 2rem; }
+        li { margin-bottom: 0.5rem; }
+
+        figure { margin: 2rem 0; text-align: center; }
+        figure img { max-width: 100%; height: auto; border: 1px solid var(--border-color); border-radius: 4px; }
+        figcaption { font-style: italic; margin-top: 0.75rem; font-size: 0.95rem; text-align: left; padding: 0 1rem; }
+
+        code, .code-block {
+            background-color: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        .algorithm {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            border: 1px solid var(--border-color);
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        .math { font-style: italic; }
+        sub, sup { font-size: 0.75rem; }
+
+        .references { font-size: 0.9rem; }
+        .references ol { padding-left: 2rem; }
+        .references li { margin-bottom: 0.75rem; }
+
+        @media (max-width: 600px) {
+            body { padding: 1rem; font-size: 15px; }
+            h1 { font-size: 1.8rem; }
+            h2 { font-size: 1.5rem; }
+            table { font-size: 0.85rem; }
+            th, td { padding: 0.5rem; }
+        }
+
+        @media print {
+            body { max-width: none; padding: 0; }
+            .pdf-download, .skip-link { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="pdf-download" role="complementary" aria-label="Download options">
+        <a href="mamba.pdf" download aria-label="Download original PDF document">
+            Download Original PDF (arXiv:2312.02149)
+        </a>
+    </div>
+
+    <main id="main-content" role="main">
+        <article>
+            <header>
+                <h1>Generative Powers of Ten</h1>
+                <p class="authors">
+                    <strong>Xiaojuan Wang</strong><sup>1</sup>,
+                    <strong>Janne Kontkanen</strong><sup>2</sup>,
+                    <strong>Brian Curless</strong><sup>1,2</sup>,
+                    <strong>Steven M. Seitz</strong><sup>1,2</sup>,
+                    <strong>Ira Kemelmacher-Shlizerman</strong><sup>1,2</sup>,
+                    <strong>Ben Mildenhall</strong><sup>2</sup>,
+                    <strong>Pratul Srinivasan</strong><sup>2</sup>,
+                    <strong>Dor Verbin</strong><sup>2</sup>,
+                    <strong>Aleksander Holynski</strong><sup>2,3</sup>
+                </p>
+                <p class="affiliations">
+                    <sup>1</sup>University of Washington &nbsp;
+                    <sup>2</sup>Google Research &nbsp;
+                    <sup>3</sup>UC Berkeley
+                </p>
+                <p class="metadata">
+                    arXiv:2312.02149v2 [cs.CV] 22 May 2024<br>
+                    Project page: <a href="https://powers-of-ten.github.io">powers-of-ten.github.io</a>
+                </p>
+            </header>
+
+            <section class="abstract" aria-labelledby="abstract-heading">
+                <h2 id="abstract-heading">Abstract</h2>
+                <p>
+                    We present a method that uses a text-to-image model to generate consistent content across multiple image scales, enabling extreme semantic zooms into a scene, e.g. ranging from a wide-angle landscape view of a forest to a macro shot of an insect sitting on one of the tree branches. We achieve this through a joint multi-scale diffusion sampling approach that encourages consistency across different scales while preserving the integrity of each individual sampling process. Since each generated scale is guided by a different text prompt, our method enables deeper levels of zoom than traditional super-resolution methods that may struggle to create new contextual structure at vastly different scales. We compare our method qualitatively with alternative techniques in image super-resolution and outpainting, and show that our method is most effective at generating consistent multi-scale content.
+                </p>
+            </section>
+
+            <nav class="toc" aria-labelledby="toc-heading">
+                <h2 id="toc-heading">Table of Contents</h2>
+                <ul>
+                    <li><a href="#section-1">1. Introduction</a></li>
+                    <li><a href="#section-2">2. Prior Work</a></li>
+                    <li><a href="#section-3">3. Preliminaries</a></li>
+                    <li><a href="#section-4">4. Method</a></li>
+                    <li><a href="#section-5">5. Experiments</a></li>
+                    <li><a href="#section-6">6. Discussion &amp; Limitations</a></li>
+                    <li><a href="#references">References</a></li>
+                </ul>
+            </nav>
+
+            <section id="section-1" aria-labelledby="heading-1">
+                <h2 id="heading-1">1. Introduction</h2>
+                <p>
+                    Recent advances in text-to-image models have been transformative in enabling applications like image generation from a single text prompt. But while digital images exist at a fixed resolution, the real world can be experienced at many different levels of scale. Few things exemplify this better than the classic 1977 short film "Powers of Ten", which showcases the sheer magnitudes of scale that exist in the universe by visualizing a continuous zoom from the outermost depths of the galaxy to the cells inside our bodies. Unfortunately, producing animations or interactive experiences like these has traditionally required trained artists and many hours of tedious labor—and although we might want to replace this process with a generative model, existing methods have not yet demonstrated the ability to generate consistent content across multiple zoom levels.
+                </p>
+                <p>
+                    Unlike traditional super-resolution methods, which generate higher-resolution content conditioned on the pixels of the original image, extreme zooms expose entirely new structures, e.g., magnifying a hand to reveal its underlying skin cells. Generating such a zoom requires semantic knowledge of human anatomy. In this paper, we focus on solving this <em>semantic zoom</em> problem, i.e., enabling text-conditioned multi-scale image generation, to create Powers of Ten-like zoom videos.
+                </p>
+                <p>
+                    As input, our method expects a series of text prompts that describe different scales of the scene, and produces as output a multi-scale image representation that can be explored interactively or rendered to a seamless zooming video. These text prompts can be user-defined (allowing for creative control over the content at different zoom levels) or crafted with the help of a large language model.
+                </p>
+                <p>
+                    At its core, our method relies on a joint sampling algorithm that uses a set of parallel diffusion sampling processes distributed across zoom levels. These sampling processes are coordinated to be consistent through an iterative frequency-band consolidation process, in which intermediate image predictions are consistently combined across scales. Unlike existing approaches that accomplish similar goals by repeatedly increasing the effective image resolution, our sampling process jointly optimizes for the content of all scales at once, allowing for both (1) plausible images at each scale and (2) consistent content across scales.
+                </p>
+            </section>
+
+            <section id="section-2" aria-labelledby="heading-2">
+                <h2 id="heading-2">2. Prior Work</h2>
+
+                <h3 id="heading-2-1">Super-resolution and inpainting</h3>
+                <p>
+                    Existing text-based super resolution models and outpainting models can be adapted to the zoom task as autoregressive processes, i.e., by progressively outpainting a zoomed-in image, or progressively super-resolving a zoomed-out image. One significant drawback of these approaches is that later-generated images have no influence on the previously generated ones, which can often lead to suboptimal results, as certain structures may be entirely incompatible with subsequent levels of detail, causing error accumulation across recurrent network applications.
+                </p>
+
+                <h3 id="heading-2-2">Perpetual view generation</h3>
+                <p>
+                    Starting from a single view RGB image, perpetual view generation methods like Infinite Nature and InfiniteNature-Zero learn to generate unbounded flythrough videos of natural scenes. These methods differ from our generative zoom in two key ways: (1) they translate the camera in 3D, causing a "fly-through" effect with perspective effects, rather than the "zoom in" our method produces, and (2) they synthesize the fly-through starting from a single image by progressively inpainting unknown parts of novel views, whereas we generate the entire zoom sequence simultaneously and coherently across scales, with text-guided semantic control.
+                </p>
+
+                <h3 id="heading-2-3">Diffusion joint sampling for consistent generation</h3>
+                <p>
+                    Recent research leverages pretrained diffusion models to generate arbitrary-sized images or panoramas from smaller pieces using joint diffusion processes. These processes involve concurrently generating these multiple images by merging their intermediate results within the sampling process. In particular, DiffCollage introduces a factor graph formulation to express spatial constraints among these images. Other works such as MultiDiffusion reconciles different denoising steps by solving for a least squares optimal solution: i.e., averaging the diffusion model predictions at overlapping areas. However, none of these approaches can be applied to our problem, where our jointly sampled images have spatial correspondence at vastly different spatial scales.
+                </p>
+            </section>
+
+            <section id="section-3" aria-labelledby="heading-3">
+                <h2 id="heading-3">3. Preliminaries</h2>
+                <p>
+                    Diffusion models generate images from random noise through a sequential sampling process. This sampling process reverses a destructive process that gradually adds Gaussian noise on a clean image <span class="math">x</span>. The intermediate noisy image at time step <span class="math">t</span> is expressed as:
+                </p>
+                <p style="text-align: center;">
+                    <span class="math">z<sub>t</sub> = α<sub>t</sub>x + σ<sub>t</sub>ε<sub>t</sub></span>
+                </p>
+                <p>
+                    where <span class="math">ε<sub>t</sub> ~ N(0, I)</span> is a standard Gaussian noise, and <span class="math">α<sub>t</sub></span> and <span class="math">σ<sub>t</sub></span> define a fixed noise schedule, with larger <span class="math">t</span> corresponding to more noise. A diffusion model is a neural network <span class="math">ε<sub>θ</sub></span> that predicts the approximate clean image <span class="math">x̂</span> directly, or equivalently the added noise <span class="math">ε<sub>t</sub></span> in <span class="math">z<sub>t</sub></span>.
+                </p>
+                <p>
+                    Once the diffusion model is trained, various sampling methods are designed to sample efficiently from the model, starting from pure noise <span class="math">z<sub>T</sub> ~ N(0, I)</span> and iteratively denoising it to a clean image. These sampling methods often rely on classifier-free guidance, a process which uses a linear combination of the text-conditional and unconditional predictions to achieve better adherence to the conditioning signal:
+                </p>
+                <p style="text-align: center;">
+                    <span class="math">ε̂<sub>t</sub> = (1 + ω)ε<sub>θ</sub>(z<sub>t</sub>; t, y) − ωε<sub>θ</sub>(z<sub>t</sub>; t)</span>
+                </p>
+            </section>
+
+            <section id="section-4" aria-labelledby="heading-4">
+                <h2 id="heading-4">4. Method</h2>
+                <p>
+                    Let <span class="math">y<sub>0</sub>, ..., y<sub>N-1</sub></span> be a series of prompts describing a single scene at varying, corresponding zoom levels <span class="math">p<sub>0</sub>, ..., p<sub>N-1</sub></span> forming a geometric progression, i.e., <span class="math">p<sub>i</sub> = p<sup>i</sup></span> (we typically set <span class="math">p</span> to 2 or 4). Our objective is to generate a sequence of corresponding <span class="math">H × W × C</span> images <span class="math">x<sub>0</sub>, ..., x<sub>N-1</sub></span> from an existing, pre-trained, text-to-image diffusion model. We aim to generate the entire set of images jointly in a zoom-consistent way.
+                </p>
+
+                <h3 id="heading-4-1">4.1 Zoom Stack Representation</h3>
+                <p>
+                    Our zoom stack representation, which we denote by <span class="math">L = (L<sub>0</sub>, ..., L<sub>N-1</sub>)</span>, is designed to allow rendering images at any zoom level. The representation contains <span class="math">N</span> images of shape <span class="math">H × W</span>, one for each zoom level, where the <span class="math">i</span>th image <span class="math">L<sub>i</sub></span> stores the pixels corresponding to the <span class="math">i</span>th zoom level <span class="math">p<sub>i</sub></span>.
+                </p>
+                <p>
+                    <strong>Image rendering:</strong> The rendering operator, which we denote by <span class="math">Π<sub>image</sub>(L; i)</span>, takes a zoom stack <span class="math">L</span> and returns the image at the <span class="math">i</span>th zoom level. An image <span class="math">x<sub>i</sub></span> at the <span class="math">i</span>th zoom level is rendered by starting with <span class="math">L<sub>i</sub></span>, and iteratively replacing its central <span class="math">H/p<sup>j</sup> × W/p<sup>j</sup></span> crop with the downscaled content from finer levels. This process guarantees that rendering at different zoom levels will be consistent at overlapping central regions.
+                </p>
+                <p>
+                    <strong>Noise rendering:</strong> At every denoising iteration of DDPM, each pixel is corrupted by globally-scaled i.i.d. Gaussian noise. Since we would like images rendered at different zoom levels to be consistent, it is essential to make sure the added noise is also consistent, with overlapping regions across different zoom levels sharing the same noise structure.
+                </p>
+
+                <h3 id="heading-4-2">4.2 Multi-resolution Blending</h3>
+                <p>
+                    We describe a mechanism for integrating multiple observations of the same scene <span class="math">x<sub>0</sub>, ..., x<sub>N-1</sub></span> at varying zoom levels into a consistent zoom stack <span class="math">L</span>. This process is a necessary component of the consistent sampling process, as the diffusion model applied at various zoom levels will produce inconsistent content in the overlapping regions.
+                </p>
+                <p>
+                    The simplest possible solution is to naively average the overlapping regions across all observations. This approach, however, results in blurry zoom stack images, since coarser-scale observations of overlapping regions contain fewer pixels, and therefore only lower-frequency information.
+                </p>
+                <p>
+                    To solve this, we propose an approach we call <em>multi-resolution blending</em>, which uses Laplacian pyramids to selectively fuse the appropriate frequency bands of each observation level, which prevents aliasing as well as over-blurring. We analyze each of these <span class="math">N-i-1</span> images into a Laplacian pyramid, and average across corresponding frequency bands, resulting in an average Laplacian pyramid, which can be recomposed into an image and assigned to the <span class="math">i</span>th level of the zoom stack.
+                </p>
+
+                <h3 id="heading-4-3">4.3 Multi-scale Consistent Sampling</h3>
+                <p>
+                    Our complete multi-scale joint sampling process works as follows: Noisy images <span class="math">z<sub>i,t</sub></span> in each zoom level along with the respective prompt <span class="math">y<sub>i</sub></span> are fed into the pretrained diffusion model in parallel to predict the noise and compute the estimated clean images <span class="math">x̂<sub>i,t</sub></span>. Equipped with our multi-resolution blending technique, the clean images are consolidated into a zoom stack, which is then rendered at all zoom levels, yielding consistent images. These images are then used in a DDPM update step along with the input to compute the next timestep.
+                </p>
+
+                <div class="algorithm" role="region" aria-label="Algorithm 2: Multi-scale joint sampling">
+                    <strong>Algorithm 2: Multi-scale joint sampling</strong>
+1: Set L<sub>T</sub> ← 0, z<sub>i,T</sub> ~ N(0, I), ∀i = 0, ..., N-1
+2: for t = T, ..., 1 do
+3:     E ~ N(0, I)
+4:     parfor i = 0, ..., N-1 do
+5:         x<sub>i,t</sub> = Π<sub>image</sub>(L<sub>t</sub>; i)
+6:         ε<sub>i</sub> = Π<sub>noise</sub>(E; i)
+7:         z<sub>i,t-1</sub> = DDPM_update(z<sub>i,t</sub>, x<sub>i,t</sub>, ε<sub>i</sub>)
+8:         ε̂<sub>i,t-1</sub> = (1+ω)ε<sub>θ</sub>(z<sub>i,t-1</sub>; t-1, y<sub>i</sub>) − ωε<sub>θ</sub>(z<sub>i,t-1</sub>; t-1)
+9:         x̂<sub>i,t-1</sub> = (z<sub>i,t-1</sub> − σ<sub>t-1</sub>ε̂<sub>i,t-1</sub>)/α<sub>t-1</sub>
+10:    end parfor
+11:    L<sub>t-1</sub> ← Blending({x̂<sub>i,t-1</sub>}<sup>N-1</sup><sub>i=0</sub>)
+12: end for
+13: return L<sub>0</sub>
+                </div>
+
+                <h3 id="heading-4-4">4.4 Photograph-based Zoom</h3>
+                <p>
+                    In addition to using text prompts to generate the entire zoom stack from scratch, our approach can also generate a sequence zooming into an existing photograph. Given the most zoomed-out input image <span class="math">ξ</span>, we still use Algorithm 2, but we additionally update the denoised images to minimize a loss function that encourages the estimated clean images to match with the content provided in <span class="math">ξ</span> in a zoom-consistent way.
+                </p>
+
+                <h3 id="heading-4-5">4.5 Implementation Details</h3>
+                <p>
+                    For the underlying text-to-image diffusion model, we use a version of Imagen trained on internal data sources, which is a cascaded diffusion model consisting of (1) a base model conditioned on a text prompt embedding and (2) a super resolution model additionally conditioned on the low resolution output from the base model. We use its default DDPM sampling procedure with 256 sampling steps, and we employ our multi-scale joint sampling to the base model only. We use the super resolution model to upsample each generated image independently.
+                </p>
+            </section>
+
+            <section id="section-5" aria-labelledby="heading-5">
+                <h2 id="heading-5">5. Experiments</h2>
+                <p>
+                    We demonstrate that our approach successfully generates consistent high quality zoom sequences for arbitrary relative zoom factors and a diverse set of scenes.
+                </p>
+
+                <h3 id="heading-5-1">5.1 Text Prompt Generation</h3>
+                <p>
+                    We generate a collection of text prompts that describe scenes at varying levels of scales using a combination of ChatGPT and manual editing. We start with prompting ChatGPT with a description of a scene, and asking it to formulate the sequence of prompts we might need for different zoom levels. While the results from this query are often plausible, they often (1) do not accurately match the corresponding requested scales, or (2) do not match the distribution of text prompts that the text-to-image model is able to most effectively generate. As such, we manually refine the prompts.
+                </p>
+
+                <h3 id="heading-5-2">5.2 Baseline Comparisons</h3>
+                <p>
+                    We compare zoom sequences generated with our method and without (i.e., independently sampling each scale). When compared to our results, the independently-generated images similarly follow the text prompt, but clearly do not correspond to a single consistent underlying scene.
+                </p>
+                <p>
+                    We also compare our method to two autoregressive generation approaches for generating zoom sequences: (1) Stable Diffusion's outpainting model and (2) Stable Diffusion's "upscale" super-resolution model.
+                </p>
+                <p>
+                    <strong>Comparison to progressive outpainting:</strong> The outpainting baseline starts with generating the most zoomed-in image and progressively generates coarser scales by downsampling the previous generated image and outpainting the surrounding area. Because of the causality of the autoregressive process, the outpainting approach suffers from gradually accumulating errors.
+                </p>
+                <p>
+                    <strong>Comparison to progressive super-resolution:</strong> The super-resolution baseline starts with the most zoomed-out image and generates subsequent scales by super-resolving the upscaled central image region. This super-resolution baseline is not able to synthesize new objects that would only appear in the finer, zoomed-in scales.
+                </p>
+
+                <table role="table" aria-labelledby="table-1-caption">
+                    <caption id="table-1-caption">Table 1: Quantitative evaluation compared with baselines. Metrics computed at all prompt scales and averaged across all examples.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Method</th>
+                            <th scope="col">CLIP-score ↑</th>
+                            <th scope="col">CLIP-aesthetic ↑</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>SR</td><td>29.18</td><td>4.89</td></tr>
+                        <tr><td>Outpainting</td><td>30.08</td><td>5.51</td></tr>
+                        <tr><td><strong>Ours</strong></td><td><strong>31.39</strong></td><td><strong>5.65</strong></td></tr>
+                    </tbody>
+                </table>
+
+                <h3 id="heading-5-3">5.3 Ablations</h3>
+                <p>
+                    We show comparisons to simpler versions of our method to examine the effect of our design decisions:
+                </p>
+                <ul>
+                    <li><strong>Joint vs. Iterative update:</strong> Instead of performing multi-scale blending approach, we can instead iteratively cycle through the images in the zoom stack, and perform one sampling step at each level independently. We find that although this produces more consistent results than independent sampling, there remain inconsistencies at stack layer boundaries.</li>
+                    <li><strong>Shared vs. random noise:</strong> Instead of using a shared noise Π<sub>noise</sub>, noise can be sampled independently for each zoom level. We find that this leads to blur in the output samples.</li>
+                    <li><strong>Comparison with naive blending:</strong> Instead of our multi-scale blending, we can instead naively blend the observations together. We find that this leads to blurry outputs at deeper zoom levels.</li>
+                </ul>
+            </section>
+
+            <section id="section-6" aria-labelledby="heading-6">
+                <h2 id="heading-6">6. Discussion &amp; Limitations</h2>
+                <p>
+                    A significant challenge in our work is discovering the appropriate set of text prompts that (1) agree with each other across a set of fixed scales, and (2) can be effectively generated consistently by a given text-to-image model. One possible avenue of improvement could be to, along with sampling, optimize for suitable geometric transformations between successive zoom levels. These transformations could include translation, rotation, and even scale, to find better alignment between the zoom levels and the prompts.
+                </p>
+                <p>
+                    Alternatively, one can optimize the text embeddings, to find better descriptions that correspond to subsequent zoom levels. Or, instead, use the LLM for in-the-loop generation, i.e., by giving LLM the generated image content, and asking it to refine its prompts to produce images which are closer in correspondence given the set of pre-defined scales.
+                </p>
+
+                <h3 id="acknowledgements">Acknowledgements</h3>
+                <p>
+                    We thank Ben Poole, Jon Barron, Luyang Zhu, Ruiqi Gao, Tong He, Grace Luo, Angjoo Kanazawa, Vickie Ye, Songwei Ge, Keunhong Park, and David Salesin for helpful discussions and feedback. This work was supported in part by UW Reality Lab, Meta, Google, OPPO, and Amazon.
+                </p>
+            </section>
+
+            <section id="references" class="references" aria-labelledby="references-heading">
+                <h2 id="references-heading">References</h2>
+                <ol>
+                    <li id="ref-1">Stability AI. Stable-diffusion-2-inpainting. <a href="https://huggingface.co/stabilityai/stable-diffusion-2-inpainting">huggingface.co/stabilityai/stable-diffusion-2-inpainting</a></li>
+                    <li id="ref-2">Omer Bar-Tal, Lior Yariv, Yaron Lipman, and Tali Dekel. Multidiffusion: Fusing diffusion paths for controlled image generation. <em>arXiv preprint arXiv:2302.08113</em>, 2023.</li>
+                    <li id="ref-3">Tim Brooks, Aleksander Holynski, and Alexei A Efros. Instructpix2pix: Learning to follow image editing instructions. In <em>CVPR</em>, 2023.</li>
+                    <li id="ref-4">Peter J Burt and Edward H Adelson. The Laplacian pyramid as a compact image code. In <em>Readings in computer vision</em>, 1987.</li>
+                    <li id="ref-5">Prafulla Dhariwal and Alexander Nichol. Diffusion models beat GANs on image synthesis. <em>NeurIPS</em>, 2021.</li>
+                    <li id="ref-6">Dave Epstein, Allan Jabri, Ben Poole, Alexei A Efros, and Aleksander Holynski. Diffusion self-guidance for controllable image generation. <em>arXiv preprint arXiv:2306.00986</em>, 2023.</li>
+                    <li id="ref-7">Amir Hertz, Ron Mokady, Jay Tenenbaum, Kfir Aberman, Yael Pritch, and Daniel Cohen-Or. Prompt-to-prompt image editing with cross attention control. <em>arXiv preprint arXiv:2208.01626</em>, 2022.</li>
+                    <li id="ref-8">Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. <em>NeurIPS</em>, 2020.</li>
+                    <li id="ref-9">Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. <em>arXiv preprint arXiv:1412.6980</em>, 2014.</li>
+                    <li id="ref-10">Yuseung Lee, Kunho Kim, Hyunjin Kim, and Minhyuk Sung. Syncdiffusion: Coherent montage via synchronized joint diffusions. <em>NeurIPS</em>, 2023.</li>
+                    <li id="ref-11">Zhengqi Li, Qianqian Wang, Noah Snavely, and Angjoo Kanazawa. InfiniteNature-Zero: Learning perpetual view generation of natural scenes from single images. <em>ECCV</em>, 2022.</li>
+                    <li id="ref-12">Andrew Liu, Richard Tucker, Varun Jampani, Ameesh Makadia, Noah Snavely, and Angjoo Kanazawa. Infinite Nature: Perpetual view generation of natural scenes from a single image. <em>ICCV</em>, 2021.</li>
+                    <li id="ref-13">Luping Liu, Yi Ren, Zhijie Lin, and Zhou Zhao. Pseudo numerical methods for diffusion models on manifolds. <em>arXiv preprint arXiv:2202.09778</em>, 2022.</li>
+                    <li id="ref-14">OpenAI. ChatGPT [large language model]. <a href="https://chat.openai.com/chat">chat.openai.com</a></li>
+                    <li id="ref-15">Ryan Po et al. State of the art on diffusion models for visual computing. <em>arXiv preprint arXiv:2310.07204</em>, 2023.</li>
+                    <li id="ref-16">Aditya Ramesh, Prafulla Dhariwal, Alex Nichol, Casey Chu, and Mark Chen. Hierarchical text-conditional image generation with CLIP latents. <em>arXiv preprint arXiv:2204.06125</em>, 2022.</li>
+                    <li id="ref-17">Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Bjorn Ommer. High-resolution image synthesis with latent diffusion models. <em>CVPR</em>, 2022.</li>
+                    <li id="ref-18">Nataniel Ruiz et al. DreamBooth: Fine tuning text-to-image diffusion models for subject-driven generation. <em>CVPR</em>, 2023.</li>
+                    <li id="ref-19">Nataniel Ruiz et al. HyperDreamBooth: Hypernetworks for fast personalization of text-to-image models. <em>arXiv preprint arXiv:2307.06949</em>, 2023.</li>
+                    <li id="ref-20">Chitwan Saharia et al. Palette: Image-to-image diffusion models. <em>SIGGRAPH</em>, 2022.</li>
+                    <li id="ref-21">Chitwan Saharia et al. Photorealistic text-to-image diffusion models with deep language understanding. <em>NeurIPS</em>, 2022.</li>
+                    <li id="ref-22">Chitwan Saharia et al. Image super-resolution via iterative refinement. <em>IEEE TPAMI</em>, 2022.</li>
+                    <li id="ref-23">Jascha Sohl-Dickstein et al. Deep unsupervised learning using nonequilibrium thermodynamics. <em>ICML</em>, 2015.</li>
+                    <li id="ref-24">Jiaming Song, Chenlin Meng, and Stefano Ermon. Denoising diffusion implicit models. <em>arXiv preprint arXiv:2010.02502</em>, 2020.</li>
+                    <li id="ref-25">Yang Song and Stefano Ermon. Generative modeling by estimating gradients of the data distribution. <em>NeurIPS</em>, 2019.</li>
+                    <li id="ref-26">Yang Song et al. Score-based generative modeling through stochastic differential equations. <em>arXiv preprint arXiv:2011.13456</em>, 2020.</li>
+                    <li id="ref-27">Luming Tang et al. RealFill: Reference-driven generation for authentic image completion. <em>arXiv preprint arXiv:2309.16668</em>, 2023.</li>
+                    <li id="ref-28">Shitao Tang et al. MVDiffusion: Enabling holistic multi-view image generation with correspondence-aware diffusion. <em>arXiv preprint arXiv:2307.01097</em>, 2023.</li>
+                    <li id="ref-29">Lvmin Zhang, Anyi Rao, and Maneesh Agrawala. Adding conditional control to text-to-image diffusion models. <em>ICCV</em>, 2023.</li>
+                    <li id="ref-30">Qinsheng Zhang et al. DiffCollage: Parallel generation of large content with diffusion models. <em>arXiv preprint arXiv:2303.17076</em>, 2023.</li>
+                </ol>
+            </section>
+
+        </article>
+    </main>
+</body>
+</html>
